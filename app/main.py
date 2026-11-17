@@ -197,6 +197,7 @@ def _png_data_url(img):
 def engrave_info():
     return {
         "remove_bg": engrave_bg.available(),
+        "remove_bg_reason": engrave_bg.unavailable_reason(),
         "materials": {k: {"name": v["name"], "invert": v["invert"], "gamma": v["gamma"]} for k, v in MATERIALS.items()},
     }
 
