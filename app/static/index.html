@@ -589,7 +589,10 @@ lDrop.addEventListener("drop", e => lSet(e.dataTransfer.files[0]));
 $("#lDither").addEventListener("change", () => $("#lThreshRow").hidden = $("#lDither").value !== "threshold");
 
 fetch("api/engrave/info").then(r => r.json()).then(j => {
-  if (!j.remove_bg) { $("#lBg").disabled = true; $("#lBgHint").hidden = false; }
+  if (!j.remove_bg) {
+    $("#lBg").disabled = true; $("#lBg").checked = false; $("#lBgHint").hidden = false;
+    if (j.remove_bg_reason) $("#lBgHint").textContent = j.remove_bg_reason;
+  }
 }).catch(() => {});
 
 const lNum = (id) => { const v = $("#" + id).value; return v === "" ? null : +v; };

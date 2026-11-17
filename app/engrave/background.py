@@ -6,7 +6,9 @@ der Rest der Gravur-Aufbereitung funktioniert trotzdem.
 Modell per Umgebungsvariable BG_MODEL wählbar (Standard: isnet-general-use).
 Modelle liegen in U2NET_HOME (Standard: ~/.u2net).
 """
+import logging
 import os
+import tempfile
 import threading
 
 import numpy as np
@@ -15,14 +17,29 @@ from PIL import Image
 BG_MODEL = os.getenv("BG_MODEL", "isnet-general-use")
 _session = None
 _lock = threading.Lock()
+_import_error = None
+log = logging.getLogger("lithophane.engrave")
+
+# numba (über pymatting/rembg) legt beim Import einen Cache an und will dafür
+# in site-packages schreiben. Im Container läuft der Dienst ohne diese Rechte.
+os.environ.setdefault("NUMBA_CACHE_DIR", os.path.join(tempfile.gettempdir(), "numba-cache"))
 
 
 def available():
+    global _import_error
     try:
         import rembg  # noqa: F401
         return True
     except ImportError:
-        return False
+        _import_error = "Hintergrund entfernen ist auf diesem Server nicht installiert (Paket rembg fehlt)."
+    except Exception as e:  # z. B. numba-Cache, onnxruntime
+        log.exception("rembg konnte nicht geladen werden")
+        _import_error = f"Hintergrund entfernen konnte nicht geladen werden: {e}"
+    return False
+
+
+def unavailable_reason():
+    return _import_error
 
 
 def _get_session():
@@ -38,12 +55,16 @@ def subject_mask(img):
     """Maske des Motivs (0..255, gleiche Größe wie img). Löcher im Motiv
     werden gefüllt, sofern sie sich vom Hintergrund deutlich unterscheiden."""
     if not available():
-        raise ValueError("Hintergrund entfernen ist auf diesem Server nicht installiert (Paket rembg fehlt).")
+        raise ValueError(_import_error)
     from rembg import remove
     from scipy import ndimage as nd
 
     rgb = img.convert("RGB")
-    raw = remove(rgb, session=_get_session(), only_mask=True)
+    try:
+        raw = remove(rgb, session=_get_session(), only_mask=True)
+    except Exception as e:
+        log.exception("Freistellen fehlgeschlagen")
+        raise ValueError(f"Hintergrund entfernen fehlgeschlagen: {e}")
     m0 = np.asarray(raw.convert("L")) > 110
     if m0.mean() < 0.005:
         raise ValueError("Im Bild wurde kein Motiv erkannt. Bitte ohne „Hintergrund entfernen“ versuchen.")

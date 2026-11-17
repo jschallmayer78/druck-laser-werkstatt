@@ -6,7 +6,7 @@ ARG WITH_BG_REMOVAL=1
 ARG BG_MODEL=isnet-general-use
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 JOB_DIR=/data \
-    U2NET_HOME=/opt/u2net BG_MODEL=${BG_MODEL}
+    U2NET_HOME=/opt/u2net BG_MODEL=${BG_MODEL} NUMBA_CACHE_DIR=/tmp/numba-cache
 WORKDIR /srv
 COPY requirements.txt requirements-bg.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
