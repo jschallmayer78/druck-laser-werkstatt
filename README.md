@@ -24,6 +24,38 @@ Hinter einem Reverse Proxy funktioniert die Oberfläche auch unter einem
 Unterpfad (z. B. `/lithophane/`), weil sie nur relative Pfade nutzt.
 Ein Upload-Limit von mindestens 150 MB im Proxy einplanen.
 
+## Lasergravur
+
+Über den Umschalter oben („Lasergravur“, direkt erreichbar unter `/#laser`)
+bereitet die Werkstatt ein Foto als Gravurvorlage für Diodenlaser und
+CO₂-Laser auf:
+
+- **Material:** Schiefer und schwarz eloxiertes Aluminium (Gravur wird hell,
+  das Bild wird automatisch invertiert), Holz und Leder (Gravur wird dunkel).
+- **Größe und Auflösung:** Breite in mm und DPI passend zum Zeilenabstand
+  der Lasersoftware (318 DPI = 0,08 mm). Die DPI stehen in der PNG-Datei,
+  LightBurn übernimmt damit die Größe direkt.
+- **Hintergrund entfernen:** Das Motiv wird freigestellt (rembg), nur das
+  Motiv wird graviert. Löcher im Motiv, die sich klar vom Hintergrund
+  unterscheiden, werden automatisch gefüllt.
+- **Rasterung:** Fehlerstreuung (Floyd-Steinberg) für Fotos, gleichmäßige
+  Rasterpunkte, Schwellwert für Strichbilder oder nur Graustufen, wenn die
+  Lasersoftware rastern soll.
+- **Ergebnis:** gerasterte 1-Bit-PNG (direkt gravieren, Modus
+  „Threshold“/„Pass-Through“) und eine Graustufen-PNG, dazu eine Vorschau,
+  wie es auf dem Material aussieht.
+
+Konvention: Schwarz = Laser an, Weiß = Laser aus.
+
+„Hintergrund entfernen“ braucht die optionalen Pakete aus
+`requirements-bg.txt` und ein Modell (ca. 180 MB, Standard
+`isnet-general-use`, einstellbar über `BG_MODEL`). Das Docker-Image bringt
+beides mit; mit `--build-arg WITH_BG_REMOVAL=0` bleibt es klein, die Option
+ist dann in der Oberfläche ausgegraut. Pro Freistellung etwa 1 GB RAM
+einplanen. Ohne Docker:
+
+    pip install -r requirements-bg.txt
+
 ## Was erzeugt wird
 
 | Form | Farbe | Inhalt der 3MF |
@@ -63,9 +95,15 @@ diese Zuordnung direkt. Falls ein Slicer die Filamente nicht automatisch
 | `MAX_PARALLEL` | 2 | gleichzeitige Berechnungen |
 | `KEEP_MINUTES` | 60 | Aufbewahrung der fertigen Dateien |
 | `JOB_DIR` | Temp-Verzeichnis | Ablage der fertigen Dateien |
+| `BG_MODEL` | `isnet-general-use` | rembg-Modell fürs Freistellen (z. B. `u2netp` für wenig RAM) |
 
 ## API
 
 `POST /api/generate` (multipart: `files` = Bilder, `options` = JSON) liefert
 Vorschau, Filament-Legende und eine Job-ID; `GET /api/download/{id}` liefert
 die 3MF. Die Optionen sind in `app/main.py` (Klasse `Options`) beschrieben.
+
+Lasergravur: `POST /api/engrave` (multipart: `file` = Bild, `options` =
+JSON, siehe Klasse `EngraveOptions`) liefert Vorschau, Kennzahlen und eine
+Job-ID; `GET /api/engrave/download/{id}/raster` bzw. `/grau` liefert die
+PNG-Dateien. `GET /api/engrave/info` meldet, ob Freistellen verfügbar ist.

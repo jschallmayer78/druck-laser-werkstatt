@@ -1,9 +1,20 @@
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 JOB_DIR=/data
+# Hintergrund entfernen für die Lasergravur (rembg + Modell, ca. 400 MB mehr im Image).
+# Abschalten mit:  docker compose build --build-arg WITH_BG_REMOVAL=0
+ARG WITH_BG_REMOVAL=1
+ARG BG_MODEL=isnet-general-use
+
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 JOB_DIR=/data \
+    U2NET_HOME=/opt/u2net BG_MODEL=${BG_MODEL}
 WORKDIR /srv
-COPY requirements.txt .
+COPY requirements.txt requirements-bg.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+RUN if [ "$WITH_BG_REMOVAL" = "1" ]; then \
+      pip install --no-cache-dir -r requirements-bg.txt && \
+      python -c "from rembg import new_session; new_session('${BG_MODEL}')" && \
+      chmod -R a+rX /opt/u2net; \
+    fi
 COPY app ./app
 RUN useradd -r -u 1000 litho && mkdir -p /data && chown litho /data
 USER litho

@@ -146,6 +146,13 @@ summary { cursor: pointer; font-family: var(--display); font-weight: 700; }
 .stats b { color: var(--ink); font-weight: 700; }
 .result h3 { font: 700 1.05rem var(--display); margin: 18px 0 4px; }
 .result ol { margin: 4px 0 0; padding-left: 1.2rem; }
+/* Umschalter Lithophane / Lasergravur */
+.modes { display: inline-flex; gap: 4px; padding: 4px; margin: 0 0 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
+.modes button { font: 700 1rem var(--display); border: 0; background: transparent; color: var(--muted); padding: 9px 18px; border-radius: 999px; cursor: pointer; }
+.modes button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.dls { display: grid; gap: 8px; }
+.dl.alt { background: var(--surface); color: var(--ink); border: 2px solid var(--amber); }
+.single img { max-width: 100%; max-height: 420px; border-radius: 4px; box-shadow: 0 0 50px rgba(255, 255, 255, .08); }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -153,10 +160,16 @@ summary { cursor: pointer; font-family: var(--display); font-weight: 700; }
 <div class="wrap">
   <header>
     <h1>Lithophane-Werkstatt</h1>
-    <p>Aus deinen Fotos wird ein 3D-Druck, der erst im Gegenlicht sein Bild zeigt. Als Lampenschirm oder flache Platte, in Weiß oder in Farbe.</p>
+    <p id="introLitho">Aus deinen Fotos wird ein 3D-Druck, der erst im Gegenlicht sein Bild zeigt. Als Lampenschirm oder flache Platte, in Weiß oder in Farbe.</p>
+    <p id="introLaser" hidden>Aus deinem Foto wird eine Gravurvorlage für den Laser, passend aufbereitet für Schiefer, Holz, Leder oder eloxiertes Aluminium.</p>
   </header>
 
-  <div class="grid">
+  <div class="modes" role="tablist" aria-label="Werkzeug">
+    <button type="button" role="tab" id="tabLitho" aria-controls="modeLitho" aria-selected="true">Lithophane (3D-Druck)</button>
+    <button type="button" role="tab" id="tabLaser" aria-controls="modeLaser" aria-selected="false">Lasergravur</button>
+  </div>
+
+  <div class="grid" id="modeLitho" role="tabpanel" aria-labelledby="tabLitho">
     <form id="form" novalidate>
       <ol class="steps">
         <li class="step" id="s1">
@@ -264,6 +277,95 @@ summary { cursor: pointer; font-family: var(--display); font-weight: 700; }
         <div class="stats" id="stats"></div>
         <h3>So geht es weiter</h3>
         <ol id="howto"></ol>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid" id="modeLaser" role="tabpanel" aria-labelledby="tabLaser" hidden>
+    <form id="lForm" novalidate>
+      <ol class="steps">
+        <li class="step" id="l1">
+          <h2>Bild hochladen</h2>
+          <label class="drop" id="lDrop">
+            <input type="file" id="lFile" accept="image/*">
+            <strong>Bild auswählen oder hierher ziehen</strong>
+            <span class="hint">JPG, PNG oder WebP, ein Bild pro Gravur</span>
+          </label>
+          <ul class="thumbs" id="lThumb"></ul>
+        </li>
+
+        <li class="step done">
+          <h2>Material wählen</h2>
+          <fieldset class="seg">
+            <legend>Material</legend>
+            <label class="opt"><input type="radio" name="material" value="schiefer" checked><span><b>Schiefer</b><small>Gravur wird hell, Bild wird invertiert</small></span></label>
+            <label class="opt"><input type="radio" name="material" value="holz"><span><b>Holz</b><small>Gravur wird dunkel</small></span></label>
+            <label class="opt"><input type="radio" name="material" value="leder"><span><b>Leder</b><small>Gravur wird dunkel</small></span></label>
+            <label class="opt"><input type="radio" name="material" value="alu"><span><b>Alu, eloxiert</b><small>Schwarz eloxiert, Gravur wird hell</small></span></label>
+          </fieldset>
+        </li>
+
+        <li class="step done">
+          <h2>Größe und Aufbereitung</h2>
+          <div class="fields">
+            <label class="f">Breite der Gravur (mm)<input type="number" id="lWidth" value="150" min="10" max="1000" step="1"></label>
+            <label class="f">Auflösung
+              <select id="lDpi">
+                <option value="254">254 DPI (Zeilenabstand 0,10 mm)</option>
+                <option value="318" selected>318 DPI (Zeilenabstand 0,08 mm)</option>
+                <option value="423">423 DPI (Zeilenabstand 0,06 mm)</option>
+                <option value="508">508 DPI (Zeilenabstand 0,05 mm)</option>
+              </select>
+            </label>
+            <label class="f">Rasterung
+              <select id="lDither">
+                <option value="floyd" selected>Fehlerstreuung (Fotos)</option>
+                <option value="ordered">Rasterpunkte, gleichmäßig</option>
+                <option value="threshold">Schwellwert (Strichbilder, Logos)</option>
+                <option value="none">Keine, nur Graustufen</option>
+              </select>
+            </label>
+          </div>
+          <label class="check" id="lBgRow"><input type="checkbox" id="lBg"><span>Hintergrund entfernen (nur das Motiv wird graviert)</span></label>
+          <label class="check"><input type="checkbox" id="lCrop" checked><span>Auf das Motiv zuschneiden, wenn der Hintergrund fehlt</span></label>
+          <p class="hint" id="lBgHint" hidden>Hintergrund entfernen ist auf diesem Server nicht installiert.</p>
+          <p class="hint">Die Auflösung sollte zum Zeilenabstand in deiner Lasersoftware passen. Für Diodenlaser sind 0,08 mm ein guter Start.</p>
+
+          <details>
+            <summary>Feineinstellungen</summary>
+            <div class="fields">
+              <label class="f">Detailverstärkung (0–1)<input type="number" id="lDetail" value="0.4" min="0" max="1" step="0.05"></label>
+              <label class="f">Schärfen (0–3)<input type="number" id="lSharpen" value="1.2" min="0" max="3" step="0.1"></label>
+              <label class="f">Gravurstärke-Kurve<input type="number" id="lGamma" placeholder="1,0" min="0.4" max="2.5" step="0.05"></label>
+              <label class="f" id="lThreshRow" hidden>Schwellwert (1–254)<input type="number" id="lThreshold" value="128" min="1" max="254" step="1"></label>
+              <label class="f">Invertieren
+                <select id="lInvert"><option value="">passend zum Material</option><option value="true">immer</option><option value="false">nie</option></select>
+              </label>
+            </div>
+            <label class="check"><input type="checkbox" id="lAuto" checked><span>Kontrast automatisch verbessern</span></label>
+            <p class="hint">Gravurstärke-Kurve über 1 graviert Mitteltöne schwächer, unter 1 kräftiger. Hilfreich, wenn der Schiefer zu hell und kreidig wird.</p>
+          </details>
+        </li>
+
+        <li class="step" id="l4">
+          <h2>Gravurvorlage erzeugen</h2>
+          <button type="submit" class="go" id="lGo">Gravurvorlage erzeugen</button>
+          <p class="error" id="lError" role="alert" hidden></p>
+          <p class="hint" id="lStatus" aria-live="polite"></p>
+        </li>
+      </ol>
+    </form>
+
+    <section class="stage" aria-label="Vorschau Gravur">
+      <div class="box" id="lBox">
+        <div class="empty" id="lEmpty"><strong>Hier erscheint deine Gravur</strong>Lade ein Bild hoch und erzeuge die Vorlage. Die Vorschau zeigt ungefähr, wie es auf dem Material aussieht.</div>
+        <div id="lView" class="single" hidden></div>
+      </div>
+      <div class="result" id="lResult" hidden>
+        <div class="dls" id="lDls"></div>
+        <div class="stats" id="lStats"></div>
+        <h3>So geht es weiter</h3>
+        <ol id="lHowto"></ol>
       </div>
     </section>
   </div>
@@ -453,6 +555,111 @@ function show(j, o) {
   $("#howto").innerHTML = steps.map(s => `<li>${s}</li>`).join("");
   $("#result").hidden = false;
   if (window.matchMedia("(max-width: 900px)").matches) $("#box").scrollIntoView({ behavior: "smooth" });
+}
+/* ------------------------------------------------------------ Umschalter */
+function setMode(m) {
+  const laser = m === "laser";
+  $("#modeLitho").hidden = laser; $("#modeLaser").hidden = !laser;
+  $("#introLitho").hidden = laser; $("#introLaser").hidden = !laser;
+  $("#tabLitho").setAttribute("aria-selected", String(!laser));
+  $("#tabLaser").setAttribute("aria-selected", String(laser));
+  document.title = laser ? "Lasergravur – Lithophane-Werkstatt" : "Lithophane-Werkstatt";
+  history.replaceState(null, "", laser ? "#laser" : location.pathname + location.search);
+}
+$("#tabLitho").addEventListener("click", () => setMode("litho"));
+$("#tabLaser").addEventListener("click", () => setMode("laser"));
+if (location.hash === "#laser") setMode("laser");
+
+/* ------------------------------------------------------------ Lasergravur */
+let lFile = null;
+function lSet(f) {
+  if (!f || !f.type.startsWith("image/")) return;
+  lFile = f;
+  const url = URL.createObjectURL(f);
+  $("#lThumb").innerHTML = `<li><img alt="${esc(f.name)}" src="${url}"><div class="ctl"><span></span><button type="button" aria-label="Entfernen">✕</button><span></span></div></li>`;
+  $("#lThumb img").onload = () => URL.revokeObjectURL(url);
+  $("#lThumb button").onclick = () => { lFile = null; $("#lThumb").innerHTML = ""; $("#l1").classList.remove("done"); };
+  $("#l1").classList.add("done");
+}
+$("#lFile").addEventListener("change", e => { lSet(e.target.files[0]); e.target.value = ""; });
+const lDrop = $("#lDrop");
+["dragenter", "dragover"].forEach(t => lDrop.addEventListener(t, e => { e.preventDefault(); lDrop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => lDrop.addEventListener(t, e => { e.preventDefault(); lDrop.classList.remove("over"); }));
+lDrop.addEventListener("drop", e => lSet(e.dataTransfer.files[0]));
+$("#lDither").addEventListener("change", () => $("#lThreshRow").hidden = $("#lDither").value !== "threshold");
+
+fetch("api/engrave/info").then(r => r.json()).then(j => {
+  if (!j.remove_bg) { $("#lBg").disabled = true; $("#lBgHint").hidden = false; }
+}).catch(() => {});
+
+const lNum = (id) => { const v = $("#" + id).value; return v === "" ? null : +v; };
+function lOptions() {
+  const inv = $("#lInvert").value;
+  return {
+    material: val("material"), width_mm: lNum("lWidth"), dpi: +$("#lDpi").value,
+    remove_bg: $("#lBg").checked, crop: $("#lCrop").checked, dither: $("#lDither").value,
+    threshold: lNum("lThreshold") ?? 128, autocontrast: $("#lAuto").checked,
+    detail: lNum("lDetail") ?? 0.4, sharpen: lNum("lSharpen") ?? 1.2, gamma: lNum("lGamma"),
+    invert: inv === "" ? null : inv === "true",
+  };
+}
+
+const L_TIPS = {
+  schiefer: ["Wenig Leistung reicht: Schiefer soll nur hellgrau werden. Zu viel Leistung lässt ihn kreidig weiß ausbrechen.",
+             "Nach dem Gravieren abwischen und dünn mit Öl einreiben, das verstärkt den Kontrast deutlich."],
+  holz: ["Helle, gleichmäßige Hölzer (Ahorn, Birke, Linde) zeigen Fotos am besten.",
+         "Holz vorher abkleben oder nachher leicht schleifen, um Rauchspuren zu entfernen."],
+  leder: ["Nur pflanzlich gegerbtes Leder gravieren, kein Chrom-gegerbtes oder Kunstleder.",
+          "Mit geringer Leistung beginnen, Leder dunkelt schnell nach."],
+  alu: ["Diodenlaser entfernen nur die Eloxalschicht, das Metall darunter bleibt unversehrt.",
+        "Für feine Details eine hohe Auflösung (423 DPI oder mehr) wählen."],
+};
+
+$("#lForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("#lError"); err.hidden = true;
+  if (!lFile) { err.textContent = "Lade zuerst ein Bild hoch."; err.hidden = false; return; }
+  const o = lOptions();
+  const fd = new FormData();
+  fd.append("file", lFile, lFile.name);
+  fd.append("options", JSON.stringify(o));
+  const go = $("#lGo"), status = $("#lStatus");
+  go.disabled = true; go.textContent = o.remove_bg ? "Motiv wird freigestellt …" : "Vorlage wird erzeugt …";
+  const t0 = Date.now();
+  const tick = setInterval(() => status.textContent = `Läuft seit ${Math.round((Date.now() - t0) / 1000)} s`, 1000);
+  try {
+    const r = await fetch("api/engrave", { method: "POST", body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Die Vorlage konnte nicht erzeugt werden. Prüfe die Einstellungen.");
+    lShow(j, o);
+    status.textContent = `Fertig in ${Math.round((Date.now() - t0) / 1000)} s`;
+    $("#l4").classList.add("done");
+  } catch (ex) {
+    err.textContent = ex.message === "Failed to fetch" ? "Der Server ist nicht erreichbar." : ex.message;
+    err.hidden = false; status.textContent = "";
+  } finally {
+    clearInterval(tick); go.disabled = false; go.textContent = "Gravurvorlage erzeugen";
+  }
+});
+
+function lShow(j, o) {
+  $("#lEmpty").hidden = true;
+  const view = $("#lView"); view.hidden = false;
+  view.innerHTML = `<img alt="Vorschau der Gravur auf dem Material" src="${j.preview}">`;
+  $("#lDls").innerHTML = j.downloads.map((d, i) =>
+    `<a class="dl${i ? " alt" : ""}" href="api/engrave/download/${j.id}/${d.kind}?name=${encodeURIComponent(d.filename)}" download="${esc(d.filename)}">${esc(d.label)} <span>${String(d.size_mb).replace(".", ",")} MB</span></a>`).join("");
+  $("#lStats").innerHTML = Object.entries(j.stats).map(([k, v]) => `<span>${esc(k)} <b>${esc(v)}</b></span>`).join("");
+  const mm = String(o.width_mm).replace(".", ",");
+  const line = (25.4 / o.dpi).toFixed(2).replace(".", ",");
+  const steps = j.downloads.some(d => d.kind === "raster")
+    ? [`Gerasterte Datei in LightBurn (oder deiner Lasersoftware) öffnen und auf genau ${mm} mm Breite lassen.`,
+       `Bildmodus „Threshold“ bzw. „Pass-Through“, Zeilenabstand ${line} mm. Sonst passen die Punkte nicht mehr zur Zeilenführung.`]
+    : [`Graustufen-Datei öffnen und mit der Rasterung der Lasersoftware gravieren (z. B. „Jarvis“ oder „Stucki“), Zeilenabstand ${line} mm.`];
+  steps.push("Zuerst ein kleines Testraster mit verschiedenen Leistungen und Geschwindigkeiten auf einem Reststück gravieren.");
+  steps.push(...L_TIPS[o.material]);
+  $("#lHowto").innerHTML = steps.map(s => `<li>${esc(s)}</li>`).join("");
+  $("#lResult").hidden = false;
+  if (window.matchMedia("(max-width: 900px)").matches) $("#lBox").scrollIntoView({ behavior: "smooth" });
 }
 </script>
 </body>

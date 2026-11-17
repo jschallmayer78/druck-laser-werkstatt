@@ -1,6 +1,9 @@
 services:
   lithophane:
-    build: .
+    build:
+      context: .
+      args:
+        WITH_BG_REMOVAL: "1"   # 0 = ohne „Hintergrund entfernen“ (kleineres Image)
     container_name: lithophane
     restart: unless-stopped
     ports:
