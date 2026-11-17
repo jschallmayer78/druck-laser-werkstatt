@@ -20,9 +20,34 @@ _lock = threading.Lock()
 _import_error = None
 log = logging.getLogger("lithophane.engrave")
 
-# numba (über pymatting/rembg) legt beim Import einen Cache an und will dafür
-# in site-packages schreiben. Im Container läuft der Dienst ohne diese Rechte.
-os.environ.setdefault("NUMBA_CACHE_DIR", os.path.join(tempfile.gettempdir(), "numba-cache"))
+
+
+def _writable_dir(path):
+    try:
+        os.makedirs(path, exist_ok=True)
+        probe = os.path.join(path, f".probe-{os.getpid()}")
+        open(probe, "w").close()
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
+def _setup_numba_cache():
+    """numba (über pymatting/rembg) legt beim Import einen Cache an und will
+    dafür in site-packages schreiben. Im Container läuft der Dienst ohne diese
+    Rechte. Deshalb einen beschreibbaren Ordner wählen, notfalls je Benutzer."""
+    wanted = os.environ.get("NUMBA_CACHE_DIR")
+    for path in (wanted,
+                 os.path.join(tempfile.gettempdir(), "numba-cache"),
+                 os.path.join(tempfile.gettempdir(), f"numba-cache-{os.getuid()}")):
+        if path and _writable_dir(path):
+            os.environ["NUMBA_CACHE_DIR"] = path
+            return
+    os.environ["NUMBA_CACHE_DIR"] = tempfile.mkdtemp(prefix="numba-cache-")
+
+
+_setup_numba_cache()
 
 
 def available():

@@ -16,7 +16,7 @@ RUN if [ "$WITH_BG_REMOVAL" = "1" ]; then \
       chmod -R a+rX /opt/u2net; \
     fi
 COPY app ./app
-RUN useradd -r -u 1000 litho && mkdir -p /data && chown litho /data
+RUN useradd -r -u 1000 litho && mkdir -p /data /tmp/numba-cache && chown litho /data && chown -R litho /tmp/numba-cache
 USER litho
 
 EXPOSE 8080
