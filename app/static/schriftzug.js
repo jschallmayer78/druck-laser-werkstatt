@@ -349,6 +349,11 @@ function params() {
     margin: Math.max(0, v("tBaseMargin", 6)), thick: Math.max(0.4, v("tBaseThick", 3)), radius: Math.max(0, v("tBaseRadius", 6)),
     color: $("#tBaseColor").value.toUpperCase(), filament: $("#tBaseName").value.trim() || "Basisplatte",
     same: $("#tBaseSame").checked,
+    stand: {
+      on: $("#tStandOn").checked, kind: $("#tStandKind").value,
+      angle: Math.min(30, Math.max(0, v("tStandAngle", 10))), depth: Math.max(3, v("tStandDepth", 8)),
+      clearance: Math.max(0, v("tStandClear", 0.2)), foot: Math.max(15, v("tStandFoot", 35)),
+    },
   };
   return { layers, base, q: parseFloat($("#tQuality").value) || 10 };
 }
@@ -401,6 +406,7 @@ async function generate(P) {
     else if (BP.shape === "rect") bgeo = { cx, cy, a: hw + BP.margin, b: hh + BP.margin, r: Math.min(BP.radius, hw + BP.margin, hh + BP.margin) };
     else bgeo = { cx, cy, a: hw + BP.margin, b: hh + BP.margin };
     x0 = Math.min(x0, cx - bgeo.a); x1 = Math.max(x1, cx + bgeo.a); y0 = Math.min(y0, cy - bgeo.b); y1 = Math.max(y1, cy + bgeo.b);
+    if (BP.stand.on) y0 -= BP.stand.depth + 2;   // Platz für die Steckzunge
   }
   const pad = 1.5 + hmax * 0.08;
   x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
@@ -464,6 +470,22 @@ async function generate(P) {
     g.ellipse(pcx, pcy, rx * sc + BP.margin * q, ry * sc + BP.margin * q, 0, 0, Math.PI * 2);
     g.fill();
     baseMask = readAlpha();
+  }
+  // Steckzunge unter der Platte für den Ständer: gerade Unterkante, so tief wie der Schlitz
+  let tongue = null;
+  if (BP.on && BP.stand.on && baseMask) {
+    let jBot = -1, i0 = W, i1 = -1;
+    for (let j = 0; j < H; j++) { const row = j * W; for (let i = 0; i < W; i++) if (baseMask[row + i] > 127) { if (j > jBot) jBot = j; if (i < i0) i0 = i; if (i > i1) i1 = i; } }
+    if (jBot >= 0) {
+      const tw = (i1 - i0) / q * (BP.stand.kind === "two" ? 0.8 : 0.6);
+      const ci = (i0 + i1) / 2, a0 = Math.max(0, Math.round(ci - tw * q / 2)), a1 = Math.min(W - 1, Math.round(ci + tw * q / 2));
+      let jTop = jBot;                       // höchste Unterkante der Platte innerhalb der Zungenbreite
+      for (let i = a0; i <= a1; i++) { let jb = -1; for (let j = H - 1; j >= 0; j--) if (baseMask[j * W + i] > 127) { jb = j; break; } if (jb >= 0 && jb < jTop) jTop = jb; }
+      const yTopPx = jTop - 1 * q, yBotPx = jBot + BP.stand.depth * q;
+      g.clearRect(0, 0, W, H); g.fillStyle = "#000"; g.fillRect(a0, yTopPx, a1 - a0, yBotPx - yTopPx);
+      mUnionInto(baseMask, readAlpha());
+      tongue = { w: (a1 - a0) / q, xmid: ((a0 + a1) / 2 - ox) / q };
+    }
   }
 
   // Materialfläche je Ebene: eigene Schrift + Ränder der Ebenen davor
@@ -575,6 +597,29 @@ async function generate(P) {
     L.base = base;
     parts.push({ name: `Ebene ${L.k} (Einlegeteil)`, k: L.k, filament: L.filament, color: L.color, mesh, layer: L, insert: true, exportOffset: [0, dy, -(base + BT)] });
   }
+  // Ständer: Profil mit schrägem Schlitz, entlang x extrudiert, flach auf dem Druckbett
+  if (tongue) {
+    const S = BP.stand, a = S.angle * Math.PI / 180, wv = BT + 2 * S.clearance, h = S.depth, zf = 3, Hs = h + zf, D = S.foot;
+    const wh = wv / Math.cos(a), sh = h * Math.tan(a);
+    const yb = Math.max(4, D * 0.35 - wh / 2);
+    const prof = [0, 0, D, 0, D, Hs, yb + wh + sh, Hs, yb + wh, zf, yb, zf, yb + sh, Hs, 0, Hs];
+    const lens = S.kind === "two" ? [30, 30] : [tongue.w];
+    const total = lens.reduce((x, y) => x + y, 0) + (lens.length - 1) * 10;
+    const pieces = [];
+    let xs = tongue.xmid - total / 2;
+    const yoff = yNext - 10 - D;
+    for (const len of lens) {
+      const m = extrude([{ outer: prof, holes: [] }], 0, len);
+      const pos = new Float32Array(m.pos.length);
+      for (let i = 0; i < pos.length; i += 3) { pos[i] = m.pos[i + 2] + xs; pos[i + 1] = m.pos[i] + yoff; pos[i + 2] = m.pos[i + 1]; }
+      pieces.push({ pos, idx: m.idx });
+      xs += len + 10;
+    }
+    const merged = mergeMeshes(pieces); delete merged.layers;   // getrennte Körper, nicht vereinigen
+    const col = BP.same ? layers[0] : { color: BP.color, filament: BP.filament };
+    parts.push({ name: "Ständer", k: 100, filament: col.filament, color: col.color, mesh: merged, stand: true,
+                 standInfo: { angle: S.angle, depth: h, slot: wv, kind: S.kind } });
+  }
   parts.sort((a, b) => a.k - b.k);
 
   // für die SVG: sichtbare Fläche je Ebene
@@ -671,7 +716,7 @@ async function download3mf() {
     const anyInsert = current.parts.some(p => p.insert);
     const body = {
       title: baseName(), separate: (anyInsert || !$("#tAssembly").checked) && !floating(), thumbnail: thumbnail(),
-      parts: current.parts.map(p => ({ name: p.name, filament: p.filament, color: p.color, verts: b64(shifted(p)), faces: b64(p.mesh.idx), layers: p.mesh.layers || null, own_object: !!p.insert })),
+      parts: current.parts.map(p => ({ name: p.name, filament: p.filament, color: p.color, verts: b64(shifted(p)), faces: b64(p.mesh.idx), layers: p.mesh.layers || null, own_object: !!(p.insert || p.stand) })),
     };
     const r = await fetch("api/schriftzug", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(typeof j.detail === "string" ? j.detail : "Die 3MF konnte nicht erzeugt werden."); }
@@ -727,6 +772,8 @@ function howto(res) {
   }
   steps.push(...lines);
   if (inserts.length) steps.push(`Die Einlegeteile liegen unter dem Schild flach auf dem Druckbett. Für getrennte Drucke in Bambu Studio weitere Platten anlegen und die Teile hinüberziehen. Mit Sekundenkleber oder 2K-Kleber einsetzen.`);
+  const st = res.parts.find(p => p.stand);
+  if (st) steps.push(`Zum Aufstellen: ${st.standInfo.kind === "two" ? "Die zwei Füße liegen" : "Der Ständer liegt"} unter dem Schild in der 3MF. Die Steckzunge unten an der Basisplatte in den Schlitz stecken (${de(st.standInfo.slot, 2)} mm breit, ${de(st.standInfo.depth)} mm tief, ${de(st.standInfo.angle, 0)}° nach hinten geneigt). Sitzt es zu stramm, das Spiel erhöhen.`);
   const needSupport = res.layers.some(L => !L.insert && L.freeBot > 1e-3);
   steps.push(needSupport ? "Schichthöhe 0,2 mm, 3 Wände, Stützen „Baum“ nur auf der Druckplatte." : "Schichthöhe 0,2 mm, 3 Wände, keine Stützen. Liegend drucken.");
   return steps;
@@ -748,8 +795,10 @@ async function run() {
     $("#tEmpty").hidden = true; $("#tWrap").hidden = false; $("#tBox").classList.add("lit");
     resizeView();
     const size = showParts(res.parts);
-    $("#tLegend").innerHTML = res.parts.map((p, i) =>
-      `<li><span class="sw" style="background:${p.color}"></span><span>Filament ${i + 1}: ${esc(p.filament)}</span><span class="pc">${esc(p.name)}</span></li>`).join("");
+    const keys = [];
+    const slotOf = (p) => { const k = p.filament + "|" + p.color; if (!keys.includes(k)) keys.push(k); return keys.indexOf(k) + 1; };
+    $("#tLegend").innerHTML = res.parts.map(p =>
+      `<li><span class="sw" style="background:${p.color}"></span><span>Filament ${slotOf(p)}: ${esc(p.filament)}</span><span class="pc">${esc(p.name)}</span></li>`).join("");
     const tris = res.parts.reduce((s, p) => s + p.mesh.idx.length / 3, 0);
     $("#tStats").innerHTML = [["Größe", `${de(size.x)} × ${de(size.y)} × ${de(size.z)} mm`], ["Dreiecke", tris.toLocaleString("de-DE")]]
       .map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
@@ -787,6 +836,7 @@ function hints() {
   $("#tBaseRadiusL").hidden = shape !== "rect";
   const same = $("#tBaseSame").checked;
   $("#tBaseColorL").hidden = same; $("#tBaseNameL").hidden = same;
+  $("#tStandRow").hidden = !$("#tStandOn").checked;
   const fl = floating();
   const anyInsert = current ? current.parts.some(p => p.insert) : false;
   $("#tAssembly").disabled = fl;

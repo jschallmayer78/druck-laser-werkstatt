@@ -61,8 +61,12 @@ eigenes Filament.
   der Kontur der Schrift, mit einstellbarem Rand und Dicke. Eigene Farbe
   (eigener Filament-Platz) oder in der Farbe von Ebene 1. Alle Ebenen stehen
   auf der Platte; „bis aufs Druckbett“ heißt dann „bis auf die Platte“.
+- **Ständer (optional, mit Basisplatte):** Die Platte bekommt unten eine
+  Steckzunge, dazu kommt ein separater Ständer mit schrägem Schlitz –
+  durchgehender Sockel oder zwei kurze Füße, Neigung, Einstecktiefe, Spiel und
+  Tiefe einstellbar. Beides wird liegend gedruckt und liegt flach in der 3MF.
 - **Ergebnis:** 3MF mit einem Objekt je Ebene (oder auf Wunsch einem Objekt
-  mit mehreren Teilen), Filament 1–5 schon zugeordnet. Beginnt eine Ebene
+  mit mehreren Teilen), Filamente schon zugeordnet; Teile mit gleichem Filament teilen sich einen Platz. Beginnt eine Ebene
   über dem Druckbett, wird automatisch ein Objekt mit Teilen gespeichert, damit
   der Slicer sie nicht absenkt. Dazu eine SVG mit allen Ebenen in ihren Farben
   für Laser oder Plotter.
