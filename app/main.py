@@ -3,6 +3,7 @@
 Start lokal:  uvicorn app.main:app --host 0.0.0.0 --port 8080
 """
 import base64
+import hashlib
 import io
 import json
 import os
@@ -132,9 +133,21 @@ def _read_image(f):
     return img
 
 
+def _asset_version():
+    h = hashlib.sha256()
+    for f in sorted(STATIC.glob("*.js")):
+        h.update(f.read_bytes())
+    return h.hexdigest()[:10]
+
+
+ASSET_VERSION = _asset_version()
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return (STATIC / "index.html").read_text(encoding="utf-8")
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    html = html.replace('src="static/schriftzug.js"', f'src="static/schriftzug.js?v={ASSET_VERSION}"')
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/health")
@@ -337,7 +350,11 @@ def schriftzug(model: TextModel):
     parts = [Part(name=p.name, slot=i + 1, verts=v, faces=f)
              for i, (p, (v, f)) in enumerate(zip(model.parts, meshes))]
     title = model.title.strip() or "schriftzug"
-    objects = [Obj(name=p.name, parts=[p]) for p in parts] if model.separate else [Obj(name=title, parts=parts)]
+    # Slicer setzen jedes Objekt beim Laden auf die Druckplatte. Beginnt ein Teil
+    # über dem Boden (aufgesetzt/eingelassen), muss alles ein Objekt bleiben.
+    floor = min(p.verts[:, 2].min() for p in parts)
+    separate = model.separate and all(p.verts[:, 2].min() <= floor + 1e-3 for p in parts)
+    objects = [Obj(name=p.name, parts=[p]) for p in parts] if separate else [Obj(name=title, parts=parts)]
     slots = [((p.filament.strip() or p.name), p.color.upper()) for p in model.parts]
 
     thumb = None

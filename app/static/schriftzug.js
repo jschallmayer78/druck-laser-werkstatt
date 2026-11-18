@@ -413,7 +413,7 @@ async function download3mf() {
   const go = $("#tGo"); go.disabled = true; go.textContent = "3MF wird gepackt …";
   try {
     const body = {
-      title: baseName(), separate: !$("#tAssembly").checked, thumbnail: thumbnail(),
+      title: baseName(), separate: !$("#tAssembly").checked && !floating(), thumbnail: thumbnail(),
       parts: current.parts.map(p => ({ name: p.name, filament: p.filament, color: p.color, verts: b64(p.mesh.pos), faces: b64(p.mesh.idx), layers: p.mesh.layers || null })),
     };
     const r = await fetch("api/schriftzug", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -506,6 +506,7 @@ async function activate() {
   });
   $$("input[name=tMode]").forEach(el => el.addEventListener("change", modeHint));
   $("#tBgThick").addEventListener("input", modeHint);
+  $("#tFgText").addEventListener("input", modeHint);
   modeHint();
   $("#tForm").addEventListener("submit", (e) => { e.preventDefault(); download3mf(); });
   $("#tSvg").addEventListener("click", downloadSvg);
@@ -515,8 +516,17 @@ async function activate() {
   $("#tGfName").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addGoogleFont(); } });
   run();
 }
+// Beginnt ein Teil über dem Druckbett, muss alles ein Objekt sein: Slicer setzen
+// jedes Objekt beim Laden auf die Druckplatte und würden die kleine Zeile absenken.
+function floating() {
+  const m = document.querySelector("input[name=tMode]:checked").value;
+  return m !== "through" && $("#tFgText").value.trim() !== "";
+}
 function modeHint() {
   const m = document.querySelector("input[name=tMode]:checked").value;
+  const fl = floating();
+  $("#tAssembly").disabled = fl;
+  $("#tAssemblyHint").hidden = !fl;
   $("#tEmbedRow").hidden = m !== "embedded";
   $("#tFgEmbed").max = String(num("tBgThick", 5));
   $("#tModeHint").textContent = {
