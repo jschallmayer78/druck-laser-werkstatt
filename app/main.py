@@ -1,4 +1,4 @@
-"""Lithophane-Werkstatt – Webservice.
+"""Druck & Laser Werkstatt – Webservice (Lithophanes, Schriftzüge, Lasergravur).
 
 Start lokal:  uvicorn app.main:app --host 0.0.0.0 --port 8080
 """
@@ -39,7 +39,7 @@ def _job_dir():
     for base in (os.getenv("JOB_DIR"), tempfile.gettempdir()):
         if not base:
             continue
-        d = Path(base) / "lithophane-jobs"
+        d = Path(base) / "werkstatt-jobs"
         try:
             d.mkdir(parents=True, exist_ok=True)
             (d / ".probe").touch()
@@ -55,7 +55,7 @@ Image.MAX_IMAGE_PIXELS = 60_000_000
 SLOTS = threading.Semaphore(MAX_PARALLEL)
 STATIC = Path(__file__).parent / "static"
 
-app = FastAPI(title="Lithophane-Werkstatt")
+app = FastAPI(title="Druck & Laser Werkstatt")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 

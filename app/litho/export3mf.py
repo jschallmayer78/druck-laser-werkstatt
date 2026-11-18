@@ -66,7 +66,7 @@ def write_3mf(objects, slots, thumbnail_png=None, arrange=True, title="Lithophan
       'xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06">\n'
       ' <metadata name="slic3rpe:Version3mf">1</metadata>\n'
       f' <metadata name="Title">{escape(title)}</metadata>\n'
-      ' <metadata name="Application">Lithophane-Werkstatt</metadata>\n'
+      ' <metadata name="Application">Druck-und-Laser-Werkstatt</metadata>\n'
       ' <resources>\n  <basematerials id="1">\n')
     for name, color in slots:
         w(f'   <base name={quoteattr(name)} displaycolor="{color.upper()}FF"/>\n')

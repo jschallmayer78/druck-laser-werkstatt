@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lithophane-Werkstatt</title>
+<title>Druck &amp; Laser Werkstatt</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" rel="stylesheet">
@@ -169,7 +169,7 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
 <body>
 <div class="wrap">
   <header>
-    <h1>Lithophane-Werkstatt</h1>
+    <h1>Druck &amp; Laser Werkstatt</h1>
     <p id="introLitho">Aus deinen Fotos wird ein 3D-Druck, der erst im Gegenlicht sein Bild zeigt. Als Lampenschirm oder flache Platte, in Weiß oder in Farbe.</p>
     <p id="introText" hidden>Aus zwei Textzeilen wird ein Schriftzug für den 3D-Druck: große Buchstaben hinten, eine kleinere Zeile davor, jede in ihrer eigenen Farbe.</p>
     <p id="introLaser" hidden>Aus deinem Foto wird eine Gravurvorlage für den Laser, passend aufbereitet für Schiefer, Holz, Leder oder eloxiertes Aluminium.</p>
@@ -684,9 +684,9 @@ function show(j, o) {
 }
 /* ------------------------------------------------------------ Umschalter */
 const MODES = {
-  litho: { tab: "#tabLitho", panel: "#modeLitho", intro: "#introLitho", title: "Lithophane-Werkstatt", hash: "" },
-  text:  { tab: "#tabText",  panel: "#modeText",  intro: "#introText",  title: "Schriftzug – Lithophane-Werkstatt", hash: "#schriftzug" },
-  laser: { tab: "#tabLaser", panel: "#modeLaser", intro: "#introLaser", title: "Lasergravur – Lithophane-Werkstatt", hash: "#laser" },
+  litho: { tab: "#tabLitho", panel: "#modeLitho", intro: "#introLitho", title: "Lithophane – Druck & Laser Werkstatt", hash: "" },
+  text:  { tab: "#tabText",  panel: "#modeText",  intro: "#introText",  title: "Schriftzug – Druck & Laser Werkstatt", hash: "#schriftzug" },
+  laser: { tab: "#tabLaser", panel: "#modeLaser", intro: "#introLaser", title: "Lasergravur – Druck & Laser Werkstatt", hash: "#laser" },
 };
 function setMode(m) {
   for (const [k, v] of Object.entries(MODES)) {

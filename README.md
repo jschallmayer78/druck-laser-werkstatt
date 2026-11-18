@@ -1,9 +1,17 @@
-# Lithophane-Werkstatt
+# Druck & Laser Werkstatt
 
-Webservice, der aus Fotos druckfertige Lithophanes erzeugt: als Lampenschirm
-(Zylinder, optional mit Boden und Deckel) oder als flache Platte, einfarbig
-oder mehrfarbig. Das Ergebnis ist **eine einzige 3MF-Datei**, in der jedes
-Teil schon seinem Filament-Platz zugeordnet ist.
+Webservice, der aus Fotos und Text druckfertige Vorlagen für 3D-Drucker und
+Laser erzeugt. Drei Werkzeuge, umschaltbar oben auf der Seite:
+
+- **Lithophane (3D-Druck):** Fotos als Lampenschirm (Zylinder, optional mit
+  Boden und Deckel) oder flache Platte, einfarbig oder mehrfarbig.
+- **Schriftzug (3D-Druck):** zwei Textzeilen, große Buchstaben hinten und
+  eine kleinere Zeile davor, jede in eigener Farbe.
+- **Lasergravur:** Fotos als Gravurvorlage für Schiefer, Holz, Leder oder
+  eloxiertes Aluminium.
+
+3D-Druck-Ergebnisse kommen als **eine einzige 3MF-Datei**, in der jedes Teil
+schon seinem Filament-Platz zugeordnet ist.
 
 ## Starten
 
@@ -21,7 +29,7 @@ Ohne Docker (Python 3.10 oder neuer):
     uvicorn app.main:app --host 0.0.0.0 --port 8080
 
 Hinter einem Reverse Proxy funktioniert die Oberfläche auch unter einem
-Unterpfad (z. B. `/lithophane/`), weil sie nur relative Pfade nutzt.
+Unterpfad (z. B. `/werkstatt/`), weil sie nur relative Pfade nutzt.
 Ein Upload-Limit von mindestens 150 MB im Proxy einplanen.
 
 ## Schriftzug
