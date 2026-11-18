@@ -5,8 +5,8 @@ Laser erzeugt. Drei Werkzeuge, umschaltbar oben auf der Seite:
 
 - **Lithophane (3D-Druck):** Fotos als Lampenschirm (Zylinder, optional mit
   Boden und Deckel) oder flache Platte, einfarbig oder mehrfarbig.
-- **Schriftzug (3D-Druck):** zwei Textzeilen, große Buchstaben hinten und
-  eine kleinere Zeile davor, jede in eigener Farbe.
+- **Schriftzug (3D-Druck):** bis zu vier Textebenen, große Buchstaben
+  hinten und kleinere Zeilen davor, jede in eigener Farbe.
 - **Lasergravur:** Fotos als Gravurvorlage für Schiefer, Holz, Leder oder
   eloxiertes Aluminium.
 
@@ -35,36 +35,38 @@ Ein Upload-Limit von mindestens 150 MB im Proxy einplanen.
 ## Schriftzug
 
 Über den Umschalter oben („Schriftzug“, direkt erreichbar unter
-`/#schriftzug`) entsteht ein Schriftzug aus zwei Textzeilen: eine große Zeile
-im Hintergrund und eine kleinere Zeile davor, jede in eigener Farbe.
+`/#schriftzug`) entsteht ein Schriftzug aus **1 bis 4 Ebenen**. Ebene 1 liegt
+ganz hinten, jede weitere sitzt vor den Ebenen dahinter und bekommt ihr
+eigenes Filament.
 
 - **Schriften:** rund 35 Google-Schriften (Block- und Schreibschriften),
   weitere per Name hinzufügbar oder als eigene TTF/OTF/WOFF-Datei.
-- **Einstellungen je Zeile:** Text, Buchstabenhöhe in mm, Buchstabenabstand,
-  Verstärkung (macht dünne Schriften druckfester); die kleine Zeile außerdem
-  Versatz, Überstand und ein Rand in Hintergrundfarbe, der sie mit den großen
-  Buchstaben zu einem Teil verbindet.
-- **Aufbau:** *aufgesetzt* (kleine Zeile liegt oben auf), *eingelassen*
-  (kleine Zeile sitzt in einer passgenauen Vertiefung, Tiefe in mm
-  einstellbar) oder *durchgehend* (beide Teile ab Druckbett). Je flacher
-  die Einbettung, desto später beginnen die Farbwechsel beim Druck. Wo die
-  kleine Zeile über die großen Buchstaben hinausragt, reicht sie selbst bis
-  aufs Druckbett oder – wenn abgewählt – nur so tief wie eingestellt (dann mit
-  Stützen drucken); Hintergrundmaterial gibt es nur hinter den Buchstaben.
-  Alternativ als **Einlegeteil**: Die großen Buchstaben bekommen eine
-  Aussparung (Spiel einstellbar), die kleine Zeile liegt als flaches Teil
-  daneben in der 3MF und kann in Bambu Studio auf eine zweite Platte gezogen
-  werden. Der
-  Hintergrund wird auf dem Server mit manifold3d zu einem geschlossenen
-  Körper vereinigt.
-- **Ergebnis:** 3MF mit zwei getrennten Objekten (oder auf Wunsch einem
-  Objekt mit zwei Teilen), Filament 1 = Hintergrund, Filament 2 =
-  Vordergrund, schon zugeordnet. Dazu eine SVG mit beiden Ebenen in ihren
-  Farben für Laser oder Plotter.
+- **Einstellungen je Ebene:** Text, Buchstabenhöhe in mm, Buchstabenabstand,
+  Verstärkung (macht dünne Schriften druckfester), Farbe und Filamentname.
+  Ebene 1 hat eine Dicke, jede weitere Ebene Versatz, Überstand über die
+  Ebene davor und einen Rand in der Farbe der Ebene davor.
+- **Aufbau je Ebene (ab Ebene 2):** *aufgesetzt* (liegt auf den Ebenen
+  dahinter), *eingelassen* (sitzt in einer passgenauen Vertiefung, Tiefe in
+  mm) oder *durchgehend* (reicht vor den Ebenen dahinter bis aufs
+  Druckbett). Die Vertiefung richtet sich nach der Ebene, die an der Stelle
+  zuoberst liegt. Wo nichts dahinter ist, reicht die Ebene bis aufs Druckbett
+  oder – wenn abgewählt – nur so tief wie eingestellt (dann mit Stützen
+  drucken). Material einer hinteren Ebene gibt es nur hinter deren
+  Buchstaben und Rändern.
+- **Einlegeteil:** Jede Ebene ab 2 kann als flaches Einlegeteil gedruckt
+  werden. Die Ebenen dahinter bekommen eine Aussparung (Spiel einstellbar),
+  das Teil liegt unter dem Schild in der 3MF und kann in Bambu Studio auf eine
+  weitere Platte gezogen werden.
+- **Ergebnis:** 3MF mit einem Objekt je Ebene (oder auf Wunsch einem Objekt
+  mit mehreren Teilen), Filament 1–4 schon zugeordnet. Beginnt eine Ebene
+  über dem Druckbett, wird automatisch ein Objekt mit Teilen gespeichert, damit
+  der Slicer sie nicht absenkt. Dazu eine SVG mit allen Ebenen in ihren Farben
+  für Laser oder Plotter.
 
-Die Geometrie entsteht im Browser (Schriften rendern, Konturen verfolgen,
-extrudieren); die 3D-Vorschau nutzt three.js vom CDN. Der Server packt die
-Netze nur noch in die 3MF.
+Die Geometrie entsteht im Browser (Schriften rendern, Konturen verfolgen, das
+Modell in Höhenbänder zerlegen, extrudieren); die 3D-Vorschau nutzt three.js
+vom CDN. Der Server vereinigt die Bänder jeder Ebene mit manifold3d zu einem
+geschlossenen Körper und packt alles in die 3MF.
 
 ## Lasergravur
 

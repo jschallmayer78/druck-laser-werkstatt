@@ -161,6 +161,7 @@ summary { cursor: pointer; font-family: var(--display); font-weight: 700; }
 .btn2:hover { border-color: var(--amber); }
 label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
 .textin { font-size: 1.15rem !important; }
+.tcount { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
 .viewhint { color: #9FB0C2; font-size: .85rem; margin: 10px 0 0; text-align: center; position: relative; z-index: 1; }
 .go.alt { background: var(--surface); color: var(--ink); border: 2px solid var(--ink); margin-top: 10px; font-size: 1rem; padding: 11px 20px; }
 [hidden] { display: none !important; }
@@ -171,7 +172,7 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
   <header>
     <h1>Druck &amp; Laser Werkstatt</h1>
     <p id="introLitho">Aus deinen Fotos wird ein 3D-Druck, der erst im Gegenlicht sein Bild zeigt. Als Lampenschirm oder flache Platte, in Weiß oder in Farbe.</p>
-    <p id="introText" hidden>Aus zwei Textzeilen wird ein Schriftzug für den 3D-Druck: große Buchstaben hinten, eine kleinere Zeile davor, jede in ihrer eigenen Farbe.</p>
+    <p id="introText" hidden>Aus bis zu vier Textebenen wird ein Schriftzug für den 3D-Druck: große Buchstaben hinten, kleinere Zeilen davor, jede in ihrer eigenen Farbe.</p>
     <p id="introLaser" hidden>Aus deinem Foto wird eine Gravurvorlage für den Laser, passend aufbereitet für Schiefer, Holz, Leder oder eloxiertes Aluminium.</p>
   </header>
 
@@ -297,72 +298,21 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
     <form id="tForm" novalidate>
       <ol class="steps">
         <li class="step done">
-          <h2>Große Zeile (Hintergrund)</h2>
-          <label class="f">Text<input type="text" id="tBgText" class="textin" value="ZUHAUSE" maxlength="60"></label>
-          <div class="tpick sub">
-            <label class="f">Schriftart<select id="tBgFont"></select></label>
-            <button type="button" class="btn2" data-tupload="Bg">Eigene Schrift …</button>
-          </div>
-          <div class="fields">
-            <label class="f">Buchstabenhöhe (mm)<input type="number" id="tBgHeight" value="50" min="5" max="400" step="1"></label>
-            <label class="f">Dicke (mm)<input type="number" id="tBgThick" value="5" min="0.6" max="50" step="0.2"></label>
-            <label class="f">Buchstabenabstand (mm)<input type="number" id="tBgSpacing" value="0" min="-20" max="50" step="0.5"></label>
-            <label class="f">Verstärkung (mm)<input type="number" id="tBgGrow" value="0" min="0" max="20" step="0.5"></label>
-            <label class="f">Farbe<input type="color" id="tBgColor" value="#F1EDE4"></label>
-            <label class="f">Filament<input type="text" id="tBgName" value="Weiß" maxlength="30"></label>
-          </div>
-          <p class="hint">Verstärkung macht die Buchstaben ringsum dicker; nahe Buchstaben verschmelzen dann zu einem Teil.</p>
-        </li>
-
-        <li class="step done">
-          <h2>Kleine Zeile (Vordergrund)</h2>
-          <label class="f">Text<input type="text" id="tFgText" class="textin" value="Willkommen" maxlength="60"></label>
-          <div class="tpick sub">
-            <label class="f">Schriftart<select id="tFgFont"></select></label>
-            <button type="button" class="btn2" data-tupload="Fg">Eigene Schrift …</button>
-          </div>
-          <div class="fields">
-            <label class="f">Buchstabenhöhe (mm)<input type="number" id="tFgHeight" value="30" min="3" max="400" step="1"></label>
-            <label class="f">Überstand über Hintergrund (mm)<input type="number" id="tFgOver" value="2" min="0" max="50" step="0.2"></label>
-            <label class="f">Versatz waagrecht (mm)<input type="number" id="tFgX" value="0" step="1"></label>
-            <label class="f">Versatz senkrecht (mm)<input type="number" id="tFgY" value="-6" step="1"></label>
-            <label class="f">Buchstabenabstand (mm)<input type="number" id="tFgSpacing" value="0" min="-20" max="50" step="0.5"></label>
-            <label class="f">Verstärkung (mm)<input type="number" id="tFgGrow" value="0.3" min="0" max="10" step="0.1"></label>
-            <label class="f">Rand in Hintergrundfarbe (mm)<input type="number" id="tFgRim" value="2.5" min="0" max="20" step="0.5"></label>
-            <label class="f">Farbe<input type="color" id="tFgColor" value="#C4392D"></label>
-            <label class="f">Filament<input type="text" id="tFgName" value="Rot" maxlength="30"></label>
-          </div>
-          <p class="hint">Der Rand umgibt die kleine Zeile in der Hintergrundfarbe (0 = kein Rand). Dünne Schreibschriften mit etwas Verstärkung (0,3–0,6 mm) druckfester machen.</p>
-        </li>
-
-        <li class="step done">
-          <h2>Aufbau</h2>
-          <fieldset class="seg">
-            <legend>Aufbau</legend>
-            <label class="opt"><input type="radio" name="tMode" value="stacked"><span><b>Aufgesetzt</b><small>Die kleine Zeile liegt oben auf dem Hintergrund</small></span></label>
-            <label class="opt"><input type="radio" name="tMode" value="embedded" checked><span><b>Eingelassen</b><small>Die kleine Zeile sitzt in einer passgenauen Vertiefung im Hintergrund</small></span></label>
-            <label class="opt"><input type="radio" name="tMode" value="through"><span><b>Durchgehend</b><small>Beide Zeilen stehen auf dem Druckbett</small></span></label>
+          <h2>Ebenen</h2>
+          <fieldset class="seg tcount">
+            <legend>Anzahl der Ebenen</legend>
+            <label class="opt"><input type="radio" name="tCount" value="1"><span><b>1 Ebene</b><small>Einfacher Schriftzug</small></span></label>
+            <label class="opt"><input type="radio" name="tCount" value="2" checked><span><b>2 Ebenen</b><small>Groß hinten, klein davor</small></span></label>
+            <label class="opt"><input type="radio" name="tCount" value="3"><span><b>3 Ebenen</b><small>Drei Farben</small></span></label>
+            <label class="opt"><input type="radio" name="tCount" value="4"><span><b>4 Ebenen</b><small>Vier Farben</small></span></label>
           </fieldset>
-          <div class="fields" id="tEmbedRow">
-            <label class="f">Einbettungstiefe (mm)<input type="number" id="tFgEmbed" value="2" min="0.2" max="50" step="0.2"></label>
-          </div>
-          <p class="hint" id="tModeHint"></p>
-          <label class="check"><input type="checkbox" id="tInsert"><span>Kleine Zeile als Einlegeteil drucken: Aussparung in den großen Buchstaben, das Teil liegt daneben in der 3MF</span></label>
-          <div id="tClearanceRow" hidden>
-            <div class="fields">
-              <label class="f">Spiel je Seite (mm)<input type="number" id="tClearance" value="0.15" min="0" max="1" step="0.05"></label>
-            </div>
-            <p class="hint">Die Aussparung ist um dieses Maß größer als das Einlegeteil. 0,1–0,2 mm passen für die meisten Drucker. Die Tiefe der Aussparung ist die Einbettungstiefe, das Teil ist zusätzlich um den Überstand dicker.</p>
-          </div>
-          <label class="check" id="tFgToBedRow"><input type="checkbox" id="tFgToBed" checked><span>Kleine Zeile außerhalb der großen Buchstaben bis aufs Druckbett führen</span></label>
-          <div id="tFgDepthRow" hidden>
-            <div class="fields">
-              <label class="f">Tiefe der kleinen Zeile (mm)<input type="number" id="tFgDepth" value="4" min="0.4" max="50" step="0.2"></label>
-            </div>
-            <p class="hint">Gemessen von der Oberseite der kleinen Zeile nach unten. Außerhalb der großen Buchstaben hängt sie dann in der Luft und braucht im Slicer Stützen.</p>
-          </div>
-          <label class="check" id="tAssemblyRow"><input type="checkbox" id="tAssembly"><span>Als ein Objekt mit zwei Teilen speichern statt als zwei getrennte Objekte</span></label>
-          <p class="hint" id="tAssemblyHint" hidden>Hier wird immer ein Objekt mit zwei Teilen gespeichert: Die kleine Zeile beginnt über dem Druckbett, als eigenes Objekt würde der Slicer sie auf die Platte absenken.</p>
+          <p class="hint">Ebene 1 liegt ganz hinten, jede weitere sitzt vor den Ebenen dahinter und bekommt ihr eigenes Filament.</p>
+        </li>
+
+        <li class="step done" id="tOut">
+          <h2>Ausgabe</h2>
+          <label class="check" id="tAssemblyRow"><input type="checkbox" id="tAssembly"><span>Als ein Objekt mit mehreren Teilen speichern statt als getrennte Objekte</span></label>
+          <p class="hint" id="tAssemblyHint" hidden>Hier wird immer ein Objekt mit mehreren Teilen gespeichert: Eine Ebene beginnt über dem Druckbett, als eigenes Objekt würde der Slicer sie auf die Platte absenken.</p>
           <details>
             <summary>Feineinstellungen</summary>
             <div class="fields">

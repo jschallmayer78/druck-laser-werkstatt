@@ -337,6 +337,10 @@ def _union_layers(v, f, layers):
             if m.status() != m3d.Error.NoError:
                 return v, f
             man = m if man is None else man + m
+        if hasattr(man, "simplify"):
+            # winzige Kanten an Berührstellen entfernen; sonst fallen beim Runden
+            # in der 3MF Punkte zusammen und der Slicer meldet offene Kanten
+            man = man.simplify(1e-3)
         mesh = man.to_mesh()
         return (np.asarray(mesh.vert_properties)[:, :3].astype(np.float64),
                 np.asarray(mesh.tri_verts).astype(np.int64))
