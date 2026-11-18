@@ -309,6 +309,28 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
           <p class="hint">Ebene 1 liegt ganz hinten, jede weitere sitzt vor den Ebenen dahinter und bekommt ihr eigenes Filament.</p>
         </li>
 
+        <li class="step done" id="tBaseStep">
+          <h2>Basisplatte</h2>
+          <label class="check"><input type="checkbox" id="tBaseOn"><span>Basisplatte unter den Schriftzug legen</span></label>
+          <div id="tBaseRow" hidden>
+            <fieldset class="seg sub">
+              <legend>Form der Basisplatte</legend>
+              <label class="opt"><input type="radio" name="tBaseShape" value="rect" checked><span><b>Rechteck</b><small>Mit einstellbarem Eckenradius</small></span></label>
+              <label class="opt"><input type="radio" name="tBaseShape" value="oval"><span><b>Oval</b><small>Ellipse um den Schriftzug</small></span></label>
+              <label class="opt"><input type="radio" name="tBaseShape" value="contour"><span><b>Kontur</b><small>Folgt dem Umriss der Schrift</small></span></label>
+            </fieldset>
+            <div class="fields">
+              <label class="f">Rand um die Schrift (mm)<input type="number" id="tBaseMargin" value="6" min="0" max="100" step="0.5"></label>
+              <label class="f">Dicke (mm)<input type="number" id="tBaseThick" value="3" min="0.6" max="30" step="0.2"></label>
+              <label class="f" id="tBaseRadiusL">Eckenradius (mm)<input type="number" id="tBaseRadius" value="6" min="0" max="200" step="0.5"></label>
+              <label class="f" id="tBaseColorL">Farbe<input type="color" id="tBaseColor" value="#2B2B2B"></label>
+              <label class="f" id="tBaseNameL">Filament<input type="text" id="tBaseName" value="Schwarz" maxlength="30"></label>
+            </div>
+            <label class="check"><input type="checkbox" id="tBaseSame"><span>In Farbe und Filament von Ebene 1 drucken</span></label>
+            <p class="hint">Alle Ebenen stehen auf der Platte. Wo eine Ebene sonst bis aufs Druckbett reichen würde, reicht sie jetzt bis auf die Platte.</p>
+          </div>
+        </li>
+
         <li class="step done" id="tOut">
           <h2>Ausgabe</h2>
           <label class="check" id="tAssemblyRow"><input type="checkbox" id="tAssembly"><span>Als ein Objekt mit mehreren Teilen speichern statt als getrennte Objekte</span></label>

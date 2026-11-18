@@ -290,6 +290,7 @@ class TextPart(BaseModel):
     verts: str   # base64, float32 little endian, x y z je Punkt (mm)
     faces: str   # base64, uint32 little endian, drei Punktindizes je Dreieck
     layers: Optional[List[int]] = None  # Dreiecke je Lage; mehrere Lagen werden zu einem Körper vereinigt
+    own_object: bool = False            # immer als eigenes Objekt (z. B. Einlegeteil, das flach daneben liegt)
 
     @field_validator("color")
     @classmethod
@@ -302,7 +303,7 @@ class TextPart(BaseModel):
 class TextModel(BaseModel):
     title: str = Field("schriftzug", max_length=60)
     separate: bool = True                     # getrennte Objekte statt ein Objekt mit Teilen
-    parts: List[TextPart] = Field(min_length=1, max_length=4)
+    parts: List[TextPart] = Field(min_length=1, max_length=5)   # bis zu 4 Ebenen + Basisplatte
     thumbnail: Optional[str] = Field(None, max_length=3_000_000)  # data:image/png;base64,...
 
 
@@ -356,9 +357,12 @@ def schriftzug(model: TextModel):
     title = model.title.strip() or "schriftzug"
     # Slicer setzen jedes Objekt beim Laden auf die Druckplatte. Beginnt ein Teil
     # über dem Boden (aufgesetzt/eingelassen), muss alles ein Objekt bleiben.
-    floor = min(p.verts[:, 2].min() for p in parts)
-    separate = model.separate and all(p.verts[:, 2].min() <= floor + 1e-3 for p in parts)
-    objects = [Obj(name=p.name, parts=[p]) for p in parts] if separate else [Obj(name=title, parts=parts)]
+    own = [p for p, src in zip(parts, model.parts) if src.own_object and p.verts[:, 2].min() <= 1e-3]
+    rest = [p for p in parts if not any(p is o for o in own)]
+    floor = min(p.verts[:, 2].min() for p in rest) if rest else 0.0
+    separate = model.separate and all(p.verts[:, 2].min() <= floor + 1e-3 for p in rest)
+    objects = [Obj(name=p.name, parts=[p]) for p in rest] if separate else ([Obj(name=title, parts=rest)] if rest else [])
+    objects += [Obj(name=p.name, parts=[p]) for p in own]
     slots = [((p.filament.strip() or p.name), p.color.upper()) for p in model.parts]
 
     thumb = None
