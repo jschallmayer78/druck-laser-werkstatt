@@ -41,7 +41,8 @@ im Hintergrund und eine kleinere Zeile davor, jede in eigener Farbe.
   einstellbar) oder *durchgehend* (beide Teile ab Druckbett). Je flacher
   die Einbettung, desto später beginnen die Farbwechsel beim Druck. Wo die
   kleine Zeile über die großen Buchstaben hinausragt, reicht sie selbst bis
-  aufs Druckbett; Hintergrundmaterial gibt es nur hinter den Buchstaben. Der
+  aufs Druckbett oder – wenn abgewählt – nur so tief wie eingestellt (dann mit
+  Stützen drucken); Hintergrundmaterial gibt es nur hinter den Buchstaben. Der
   Hintergrund wird auf dem Server mit manifold3d zu einem geschlossenen
   Körper vereinigt.
 - **Ergebnis:** 3MF mit zwei getrennten Objekten (oder auf Wunsch einem
