@@ -347,14 +347,21 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
             <label class="f">Einbettungstiefe (mm)<input type="number" id="tFgEmbed" value="2" min="0.2" max="50" step="0.2"></label>
           </div>
           <p class="hint" id="tModeHint"></p>
-          <label class="check"><input type="checkbox" id="tFgToBed" checked><span>Kleine Zeile außerhalb der großen Buchstaben bis aufs Druckbett führen</span></label>
+          <label class="check"><input type="checkbox" id="tInsert"><span>Kleine Zeile als Einlegeteil drucken: Aussparung in den großen Buchstaben, das Teil liegt daneben in der 3MF</span></label>
+          <div id="tClearanceRow" hidden>
+            <div class="fields">
+              <label class="f">Spiel je Seite (mm)<input type="number" id="tClearance" value="0.15" min="0" max="1" step="0.05"></label>
+            </div>
+            <p class="hint">Die Aussparung ist um dieses Maß größer als das Einlegeteil. 0,1–0,2 mm passen für die meisten Drucker. Die Tiefe der Aussparung ist die Einbettungstiefe, das Teil ist zusätzlich um den Überstand dicker.</p>
+          </div>
+          <label class="check" id="tFgToBedRow"><input type="checkbox" id="tFgToBed" checked><span>Kleine Zeile außerhalb der großen Buchstaben bis aufs Druckbett führen</span></label>
           <div id="tFgDepthRow" hidden>
             <div class="fields">
               <label class="f">Tiefe der kleinen Zeile (mm)<input type="number" id="tFgDepth" value="4" min="0.4" max="50" step="0.2"></label>
             </div>
             <p class="hint">Gemessen von der Oberseite der kleinen Zeile nach unten. Außerhalb der großen Buchstaben hängt sie dann in der Luft und braucht im Slicer Stützen.</p>
           </div>
-          <label class="check"><input type="checkbox" id="tAssembly"><span>Als ein Objekt mit zwei Teilen speichern statt als zwei getrennte Objekte</span></label>
+          <label class="check" id="tAssemblyRow"><input type="checkbox" id="tAssembly"><span>Als ein Objekt mit zwei Teilen speichern statt als zwei getrennte Objekte</span></label>
           <p class="hint" id="tAssemblyHint" hidden>Hier wird immer ein Objekt mit zwei Teilen gespeichert: Die kleine Zeile beginnt über dem Druckbett, als eigenes Objekt würde der Slicer sie auf die Platte absenken.</p>
           <details>
             <summary>Feineinstellungen</summary>

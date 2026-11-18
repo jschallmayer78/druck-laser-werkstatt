@@ -42,7 +42,11 @@ im Hintergrund und eine kleinere Zeile davor, jede in eigener Farbe.
   die Einbettung, desto später beginnen die Farbwechsel beim Druck. Wo die
   kleine Zeile über die großen Buchstaben hinausragt, reicht sie selbst bis
   aufs Druckbett oder – wenn abgewählt – nur so tief wie eingestellt (dann mit
-  Stützen drucken); Hintergrundmaterial gibt es nur hinter den Buchstaben. Der
+  Stützen drucken); Hintergrundmaterial gibt es nur hinter den Buchstaben.
+  Alternativ als **Einlegeteil**: Die großen Buchstaben bekommen eine
+  Aussparung (Spiel einstellbar), die kleine Zeile liegt als flaches Teil
+  daneben in der 3MF und kann in Bambu Studio auf eine zweite Platte gezogen
+  werden. Der
   Hintergrund wird auf dem Server mit manifold3d zu einem geschlossenen
   Körper vereinigt.
 - **Ergebnis:** 3MF mit zwei getrennten Objekten (oder auf Wunsch einem
