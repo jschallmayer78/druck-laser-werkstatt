@@ -1,4 +1,4 @@
-/* Schriftzug – zwei Textzeilen als 3D-Druck-Modell.
+/* Schriftzug – bis zu vier Textebenen als 3D-Druck-Modell.
  *
  * Die Schriften werden im Browser gerendert (Google Fonts oder eigene Datei),
  * als Maske gerastert, mit Marching Squares in Konturen umgewandelt und zu
@@ -263,136 +263,253 @@ function mergeMeshes(list) {
   return { pos, idx, layers: list.map(m => m.idx.length / 3) };   // Lagen verschmilzt der Server zu einem Körper
 }
 
-/* ------------------------------------------------------------ Generierung */
-const num = (id, d) => { const v = parseFloat($("#" + id).value); return isFinite(v) ? v : d; };
-function params() {
-  return {
-    bg: { text: $("#tBgText").value, font: fontMap.get($("#tBgFont").value), height: num("tBgHeight", 50),
-          thick: Math.max(0.4, num("tBgThick", 5)), spacing: num("tBgSpacing", 0), grow: Math.max(0, num("tBgGrow", 0)),
-          color: $("#tBgColor").value.toUpperCase(), filament: $("#tBgName").value.trim() || "Hintergrund" },
-    fg: { text: $("#tFgText").value, font: fontMap.get($("#tFgFont").value), height: num("tFgHeight", 30),
-          over: Math.max(0, num("tFgOver", 2)), embed: Math.max(0, num("tFgEmbed", 2)),
-          toBed: $("#tFgToBed").checked, depth: Math.max(0.4, num("tFgDepth", 4)),
-          insert: $("#tInsert").checked, clearance: Math.max(0, num("tClearance", 0.15)), x: num("tFgX", 0), y: num("tFgY", 0), spacing: num("tFgSpacing", 0),
-          grow: Math.max(0, num("tFgGrow", 0)), rim: Math.max(0, num("tFgRim", 0)),
-          color: $("#tFgColor").value.toUpperCase(), filament: $("#tFgName").value.trim() || "Vordergrund" },
-    mode: document.querySelector("input[name=tMode]:checked").value,
-    q: num("tQuality", 10),
-  };
+/* ------------------------------------------------------------ Ebenen */
+const MAXL = 4;
+const DEFAULTS = [
+  { text: "ZUHAUSE", font: "Anton|400", height: 50, thick: 5, spacing: 0, grow: 0, color: "#F1EDE4", filament: "Weiß" },
+  { text: "Willkommen", font: "Pacifico|400", height: 30, over: 2, x: 0, y: -6, spacing: 0, grow: 0.3, rim: 2.5,
+    color: "#C4392D", filament: "Rot", mode: "embedded", embed: 2 },
+  { text: "seit 2026", font: "Dancing Script|700", height: 9, over: 1, x: 42, y: -27, spacing: 0, grow: 0.3, rim: 1.5,
+    color: "#2E4A7D", filament: "Blau", mode: "embedded", embed: 1 },
+  { text: "Familie", font: "Great Vibes|400", height: 14, over: 1, x: -48, y: 27, spacing: 0, grow: 0.4, rim: 1.5,
+    color: "#C9A227", filament: "Gold", mode: "embedded", embed: 1 },
+];
+const layerCount = () => { const r = document.querySelector("input[name=tCount]:checked"); return r ? +r.value : 2; };
+
+function layerCard(k) {
+  const d = DEFAULTS[k - 1], id = (f) => `t${k}${f}`, front = k > 1;
+  const nf = (f, label, val, min, max, step) =>
+    `<label class="f">${label}<input type="number" id="${id(f)}" value="${val}" min="${min}" max="${max}" step="${step}"></label>`;
+  const opt = (v, t, s) =>
+    `<label class="opt"><input type="radio" name="${id("Mode")}" value="${v}"${d.mode === v ? " checked" : ""}><span><b>${t}</b><small>${s}</small></span></label>`;
+  return `<li class="step done tlayer" id="${id("Card")}">
+  <h2>Ebene ${k}${k === 1 ? " – ganz hinten" : ""}</h2>
+  <label class="f">Text<input type="text" id="${id("Text")}" class="textin" value="${esc(d.text)}" maxlength="60"></label>
+  <div class="tpick sub">
+    <label class="f">Schriftart<select id="${id("Font")}" data-def="${d.font}"></select></label>
+    <button type="button" class="btn2" data-tupload="${k}">Eigene Schrift …</button>
+  </div>
+  <div class="fields">
+    ${nf("Height", "Buchstabenhöhe (mm)", d.height, 3, 400, 1)}
+    ${front ? nf("Over", `Überstand über Ebene ${k - 1} (mm)`, d.over, 0, 50, 0.2)
+              + nf("X", "Versatz waagrecht (mm)", d.x, -500, 500, 1) + nf("Y", "Versatz senkrecht (mm)", d.y, -500, 500, 1)
+            : nf("Thick", "Dicke (mm)", d.thick, 0.6, 50, 0.2)}
+    ${nf("Spacing", "Buchstabenabstand (mm)", d.spacing, -20, 50, 0.5)}
+    ${nf("Grow", "Verstärkung (mm)", d.grow, 0, 20, 0.1)}
+    ${front ? nf("Rim", `Rand in Farbe von Ebene ${k - 1} (mm)`, d.rim, 0, 20, 0.5) : ""}
+    <label class="f">Farbe<input type="color" id="${id("Color")}" value="${d.color}"></label>
+    <label class="f">Filament<input type="text" id="${id("Name")}" value="${esc(d.filament)}" maxlength="30"></label>
+  </div>
+  ${front ? `
+  <fieldset class="seg sub">
+    <legend>Aufbau Ebene ${k}</legend>
+    ${opt("stacked", "Aufgesetzt", "Liegt auf den Ebenen dahinter")}
+    ${opt("embedded", "Eingelassen", "Sitzt in einer Vertiefung der Ebenen dahinter")}
+    ${opt("through", "Durchgehend", "Reicht vor den Ebenen dahinter bis aufs Druckbett")}
+  </fieldset>
+  <div class="fields" id="${id("EmbedRow")}">${nf("Embed", "Einbettungstiefe (mm)", d.embed, 0.2, 50, 0.2)}</div>
+  <label class="check"><input type="checkbox" id="${id("Insert")}"><span>Als Einlegeteil drucken: Aussparung in den Ebenen dahinter, das Teil liegt daneben in der 3MF</span></label>
+  <div id="${id("ClearanceRow")}" hidden>
+    <div class="fields">${nf("Clearance", "Spiel je Seite (mm)", 0.15, 0, 1, 0.05)}</div>
+    <p class="hint">Die Aussparung ist um dieses Maß größer als das Einlegeteil; 0,1–0,2 mm passen für die meisten Drucker.</p>
+  </div>
+  <label class="check" id="${id("ToBedRow")}"><input type="checkbox" id="${id("ToBed")}" checked><span>Außerhalb der Ebenen dahinter bis aufs Druckbett führen</span></label>
+  <div id="${id("DepthRow")}" hidden>
+    <div class="fields">${nf("Depth", "Tiefe der Ebene (mm)", 4, 0.4, 50, 0.2)}</div>
+    <p class="hint">Gemessen von ihrer Oberseite nach unten. Außerhalb der Ebenen dahinter hängt sie dann in der Luft und braucht im Slicer Stützen.</p>
+  </div>` : `
+  <p class="hint">Verstärkung macht die Buchstaben ringsum dicker; nahe Buchstaben verschmelzen dann zu einem Teil.</p>`}
+</li>`;
 }
 
+function layerParams(k) {
+  const g = (f) => $("#t" + k + f);
+  const v = (f, d) => { const el = g(f); const x = el ? parseFloat(el.value) : NaN; return isFinite(x) ? x : d; };
+  const L = {
+    k, text: g("Text").value, font: fontMap.get(g("Font").value) || FONTS[0],
+    height: Math.max(1, v("Height", 20)), spacing: v("Spacing", 0), grow: Math.max(0, v("Grow", 0)),
+    color: g("Color").value.toUpperCase(), filament: g("Name").value.trim() || `Ebene ${k}`, x: 0, y: 0,
+  };
+  if (k === 1) L.thick = Math.max(0.4, v("Thick", 5));
+  else Object.assign(L, {
+    over: Math.max(0, v("Over", 1)), x: v("X", 0), y: v("Y", 0), rim: Math.max(0, v("Rim", 0)),
+    mode: (document.querySelector(`input[name=t${k}Mode]:checked`) || { value: "embedded" }).value,
+    embed: Math.max(0, v("Embed", 1)), insert: g("Insert").checked, clearance: Math.max(0, v("Clearance", 0.15)),
+    toBed: g("ToBed").checked, depth: Math.max(0.4, v("Depth", 4)),
+  });
+  return L;
+}
+function params() {
+  const n = layerCount(), layers = [];
+  for (let k = 1; k <= n; k++) layers.push(layerParams(k));
+  return { layers, q: parseFloat($("#tQuality").value) || 10 };
+}
+
+/* ------------------------------------------------------------ Masken (Alpha 0–255, weiche Kanten bleiben erhalten) */
+const mUnion = (a, b) => { const o = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = a[i] > b[i] ? a[i] : b[i]; return o; };
+const mUnionInto = (o, b) => { for (let i = 0; i < o.length; i++) if (b[i] > o[i]) o[i] = b[i]; return o; };
+const mCut = (a, b) => { const o = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) { const nb = 255 - b[i]; o[i] = a[i] < nb ? a[i] : nb; } return o; };
+const mAnd = (a, b) => { const o = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = a[i] < b[i] ? a[i] : b[i]; return o; };
+const mAny = (a) => { for (let i = 0; i < a.length; i++) if (a[i] > 127) return true; return false; };
+const mSame = (a, b) => { if (!a || !b) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; };
+
+/* ------------------------------------------------------------ Generierung
+ * Jede Ebene i belegt über ihrer Grundfläche eine Säule von einer Unterkante
+ * bis zu ihrer Oberkante T_i. Die Unterkante hängt davon ab, welche Ebene an der
+ * Stelle die oberste dahinter ist (aufgesetzt / eingelassen / durchgehend) oder
+ * ob dort gar keine ist (Druckbett oder eigene Tiefe). Das Modell wird in
+ * Höhenbänder zerlegt; in jedem Band gehört ein Pixel der vordersten Ebene, die
+ * es abdeckt. Einlegeteile schneiden ihre Aussparung (mit Spiel) aus und werden
+ * als flaches Teil daneben gelegt.
+ */
 async function generate(P) {
-  await Promise.all([loadFont(P.bg.font, P.bg.text), loadFont(P.fg.font, P.fg.text)]);
-  const MB = measureLine(P.bg), MF = measureLine(P.fg);
-  if (!MB && !MF) throw new Error("Bitte mindestens eine Textzeile eingeben.");
-  // Einbettungstiefe: 0 = aufgesetzt, volle Dicke = durchgehend ab Druckbett
-  const T = P.bg.thick;
-  const embed = P.mode === "stacked" ? 0 : P.mode === "through" ? T : Math.min(T, Math.max(0, P.fg.embed));
-  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-  const ext = (cx, cy, w, h, m) => { x0 = Math.min(x0, cx - w / 2 - m); x1 = Math.max(x1, cx + w / 2 + m); y0 = Math.min(y0, cy - h / 2 - m); y1 = Math.max(y1, cy + h / 2 + m); };
-  if (MB) ext(0, 0, MB.w, MB.h, P.bg.grow);
-  if (MF) ext(P.fg.x, P.fg.y, MF.w, MF.h, P.fg.grow + P.fg.rim);
-  const pad = 1.5 + Math.max(MB ? MB.h : 0, MF ? MF.h : 0) * 0.08;   // Reserve für Glyphen-Überhänge
+  const all = P.layers;
+  if (!all[0].text.trim()) throw new Error("Ebene 1 braucht einen Text.");
+  const Ls = all.filter(L => L.text.trim());
+  await Promise.all(Ls.map(L => loadFont(L.font, L.text)));
+  for (const L of Ls) L.M = measureLine(L);
+  const layers = Ls.filter(L => L.M);
+  if (!layers.length || layers[0].k !== 1) throw new Error("Ebene 1 ergibt keine druckbare Fläche.");
+
+  // Oberkanten
+  layers.forEach((L, i) => {
+    L.T = i === 0 ? L.thick : layers[i - 1].T + (L.mode === "stacked" ? Math.max(0.2, L.over) : L.over);
+  });
+
+  // Raster
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, hmax = 0;
+  for (const L of layers) {
+    const m = L.grow + (L.rim || 0) + (L.insert ? L.clearance : 0);
+    x0 = Math.min(x0, L.x - L.M.w / 2 - m); x1 = Math.max(x1, L.x + L.M.w / 2 + m);
+    y0 = Math.min(y0, L.y - L.M.h / 2 - m); y1 = Math.max(y1, L.y + L.M.h / 2 + m);
+    hmax = Math.max(hmax, L.M.h);
+  }
+  const pad = 1.5 + hmax * 0.08;
   x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
   let q = P.q;
-  const maxPix = 24e6;
+  const maxPix = 10e6;
   if ((x1 - x0) * (y1 - y0) * q * q > maxPix) q = Math.sqrt(maxPix / ((x1 - x0) * (y1 - y0)));
   const W = Math.ceil((x1 - x0) * q), H = Math.ceil((y1 - y0) * q);
   const ox = -x0 * q, oy = y1 * q;
-  const mk = () => { const c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d", { willReadFrequently: true }); g.fillStyle = "#000"; g.strokeStyle = "#000"; return g; };
-  // Masken:
-  //   g0    große Buchstaben
-  //   gf    kleine Zeile
-  //   gfree kleine Zeile, soweit sie NICHT vor einem großen Buchstaben liegt
-  //   gs    Hintergrund unterhalb der Vertiefung: große Buchstaben + Rand, ohne gfree
-  //   gb    Hintergrund oberhalb (mit Aussparung): große Buchstaben + Rand, ohne gf
-  // Wo die kleine Zeile über die großen Buchstaben hinausragt, reicht sie bis
-  // aufs Druckbett; nur vor einem Buchstaben sitzt sie auf Hintergrundmaterial.
-  const g0 = mk(), gf = mk(), gfree = mk(), gs = mk(), gb = mk();
-  const bx = ox, by = oy, fx = ox + P.fg.x * q, fy = oy - P.fg.y * q;
-  const cutOut = (g, src) => { g.globalCompositeOperation = "destination-out"; g.drawImage(src.canvas, 0, 0); g.globalCompositeOperation = "source-over"; };
-
-  if (MB) drawLine(g0, P.bg, MB, q, bx, by, P.bg.grow);
-  if (MF) {
-    drawLine(gf, P.fg, MF, q, fx, fy, P.fg.grow);
-    drawLine(gfree, P.fg, MF, q, fx, fy, P.fg.grow);
-    cutOut(gfree, g0);
-  }
-  for (const g of [gb, gs]) {
-    if (MB) drawLine(g, P.bg, MB, q, bx, by, P.bg.grow);
-    if (MF && P.fg.rim > 0) drawLine(g, P.fg, MF, q, fx, fy, P.fg.grow + P.fg.rim);   // Rand
-  }
-  if (MF && P.fg.insert) {
-    // Einlegeteil: Aussparung mit Spiel in die großen Buchstaben, darunter voller Boden
-    for (const g of [gb, gs]) g.clearRect(0, 0, W, H);
-    for (const g of [gb, gs]) {
-      if (MB) drawLine(g, P.bg, MB, q, bx, by, P.bg.grow);
-      if (P.fg.rim > 0) drawLine(g, P.fg, MF, q, fx, fy, P.fg.grow + P.fg.rim);
-    }
-    const gc = mk();
-    drawLine(gc, P.fg, MF, q, fx, fy, P.fg.grow + P.fg.clearance);
-    cutOut(gb, gc);
-  } else if (MF) { cutOut(gb, gf); cutOut(gs, gfree); }
-  const alphaOf = (g) => {
+  const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
+  const g = canvas.getContext("2d", { willReadFrequently: true });
+  const raster = (L, strokeMm) => {
+    g.clearRect(0, 0, W, H); g.fillStyle = "#000"; g.strokeStyle = "#000";
+    drawLine(g, L, L.M, q, ox + L.x * q, oy - L.y * q, strokeMm);
     const d = g.getImageData(0, 0, W, H).data, a = new Uint8Array(W * H);
     for (let i = 0, j = 3; i < a.length; i++, j += 4) a[i] = d[j];
     for (let i = 0; i < W; i++) { a[i] = 0; a[(H - 1) * W + i] = 0; }
     for (let j = 0; j < H; j++) { a[j * W] = 0; a[j * W + W - 1] = 0; }
     return a;
   };
-  const split = MF ? T - embed : T;                 // Höhe, ab der die Vertiefung beginnt
-  const fgZ1 = T + (embed === 0 ? Math.max(0.2, P.fg.over) : P.fg.over);
-  const parts = [];
-  {
-    // unten voll (trägt die kleine Zeile), oben mit Aussparung
-    const meshes = [];
-    const cut = MF && split < T - 1e-6 ? maskToShapes(alphaOf(gb), W, H, q, ox, oy) : null;
-    const full = split > 1e-6 ? maskToShapes(alphaOf(MF ? gs : gb), W, H, q, ox, oy) : null;   // ohne kleine Zeile: gb == gs
-    if (full && full.length) meshes.push(extrude(full, 0, split));
-    if (cut && cut.length) meshes.push(extrude(cut, split, T));
-    const mesh = mergeMeshes(meshes.filter(Boolean));
-    if (mesh) parts.push({ name: "Hintergrund", filament: P.bg.filament, color: P.bg.color, shapes: (cut && cut.length) ? cut : full, mesh });
+  for (const L of layers) {
+    L.F = raster(L, L.grow);
+    if (L.rim > 0) L.D = raster(L, L.grow + L.rim);
+    if (L.insert) L.Pk = raster(L, L.grow + L.clearance);
   }
-  // Unterkante der kleinen Zeile außerhalb der großen Buchstaben:
-  // Druckbett oder eigene Tiefe (gemessen von ihrer Oberseite)
-  const fb = P.fg.toBed ? 0 : Math.min(fgZ1 - 0.2, Math.max(0, fgZ1 - P.fg.depth));
-  let freeArea = false;
-  if (MF && P.fg.insert) {
-    // flaches Einlegeteil; in der Vorschau eingesetzt, in der 3MF daneben auf dem Druckbett
-    const shapes = maskToShapes(alphaOf(gf), W, H, q, ox, oy);
-    const mesh = extrude(shapes, split, fgZ1);
-    if (mesh) {
-      let fgMaxY = -1e9, bgMinY = 1e9;
-      for (const s of shapes) fgMaxY = Math.max(fgMaxY, bbox(s.outer)[3]);
-      for (const s of (parts[0] ? parts[0].shapes : [])) bgMinY = Math.min(bgMinY, bbox(s.outer)[1]);
-      const dy = parts.length ? bgMinY - fgMaxY - 10 : 0;
-      parts.push({ name: "Einlegeteil", filament: P.fg.filament, color: P.fg.color, shapes, mesh, exportOffset: [0, dy, -split] });
+
+  // Materialfläche je Ebene: eigene Schrift + Ränder der Ebenen davor
+  const solid = layers.filter(L => !L.insert);
+  for (const L of solid) L.E = L.F.slice();
+  layers.forEach((L, i) => {
+    if (i === 0 || !L.D) return;
+    let owner = null;
+    for (let j = i - 1; j >= 0; j--) if (!layers[j].insert) { owner = layers[j]; break; }
+    if (!owner) return;
+    mUnionInto(owner.E, L.insert ? L.D : mCut(L.D, L.F));   // Einlegeteil: voller Boden unter Rand und Aussparung
+  });
+
+  // Regionen mit fester Unterkante
+  const botOver = (L, Tj) => L.mode === "stacked" ? Tj : L.mode === "through" ? 0 : Math.max(0, Tj - L.embed);
+  layers.forEach((L, i) => {
+    const foot = L.insert ? L.Pk : L.E;
+    L.regions = [];
+    if (i === 0) { L.regions.push({ mask: foot, bot: 0 }); return; }
+    const behind = solid.filter(S => layers.indexOf(S) < i);
+    let above = null;                         // Vereinigung der Ebenen zwischen j und i
+    for (let b = behind.length - 1; b >= 0; b--) {
+      const S = behind[b];
+      let r = mAnd(foot, S.E);
+      if (above) r = mCut(r, above);
+      if (mAny(r)) L.regions.push({ mask: r, bot: botOver(L, S.T), over: true });
+      above = above ? mUnion(above, S.E) : S.E.slice();
     }
-  } else if (MF) {
-    // Lagen übereinander, der Server vereinigt sie zu einem Körper:
-    //   vor den Buchstaben: Boden der Vertiefung (split) bis Oberkante
-    //   außerhalb:          fb bis Oberkante
-    const meshes = [];
-    const shapes = maskToShapes(alphaOf(gf), W, H, q, ox, oy);
-    const free = maskToShapes(alphaOf(gfree), W, H, q, ox, oy);
-    freeArea = free.length > 0;
-    if (fb < split - 1e-6) {
-      if (free.length) meshes.push(extrude(free, fb, split));
-      if (shapes.length) meshes.push(extrude(shapes, split, fgZ1));
-    } else if (fb > split + 1e-6) {
-      const gover = mk();
-      gover.drawImage(gf.canvas, 0, 0); cutOut(gover, gfree);
-      const over = maskToShapes(alphaOf(gover), W, H, q, ox, oy);
-      if (over.length) meshes.push(extrude(over, split, fb));
-      if (shapes.length) meshes.push(extrude(shapes, fb, fgZ1));
-    } else if (shapes.length) {
-      meshes.push(extrude(shapes, split, fgZ1));
+    if (!L.insert) {
+      const free = above ? mCut(foot, above) : foot;
+      if (mAny(free)) { L.regions.push({ mask: free, bot: L.toBed ? 0 : Math.max(0, Math.min(L.T - 0.2, L.T - L.depth)), free: true }); L.freeBot = L.regions.at(-1).bot; }
     }
-    const mesh = mergeMeshes(meshes.filter(Boolean));
-    if (mesh) parts.push({ name: "Vordergrund", filament: P.fg.filament, color: P.fg.color, shapes, mesh });
+    if (L.insert && L.mode === "stacked") L.regions = [];   // aufgeklebt: keine Aussparung
+  });
+
+  // Höhenbänder
+  const topZ = Math.max(...solid.map(L => L.T));
+  const zs = new Set([0, topZ]);
+  for (const L of solid) zs.add(L.T);
+  for (const L of layers) for (const r of L.regions) if (r.bot < topZ) zs.add(r.bot);
+  const levels = [...zs].map(z => Math.round(z * 1000) / 1000).filter((z, i, a) => a.indexOf(z) === i && z <= topZ).sort((a, b) => a - b);
+
+  const runs = new Map(solid.map(L => [L, { mask: null, z0: 0, pieces: [] }]));
+  const flush = (L, z1) => {
+    const run = runs.get(L);
+    if (run.mask && mAny(run.mask) && z1 > run.z0 + 1e-6) {
+      const shapes = maskToShapes(run.mask, W, H, q, ox, oy);
+      const m = extrude(shapes, run.z0, z1);
+      if (m) run.pieces.push(m);
+    }
+  };
+  const eps = 1e-6;
+  for (let b = 0; b + 1 < levels.length; b++) {
+    const za = levels[b], zb = levels[b + 1];
+    let acc = null;
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const L = layers[i];
+      let cover = null;
+      if (L.insert || L.T >= zb - eps) {
+        for (const r of L.regions) if (r.bot <= za + eps) cover = cover ? mUnionInto(cover, r.mask) : r.mask.slice();
+      }
+      if (!L.insert) {
+        const own = cover ? (acc ? mCut(cover, acc) : cover) : null;
+        const run = runs.get(L);
+        if (!mSame(own, run.mask) && !(own === null && run.mask === null)) {
+          flush(L, za);
+          run.mask = own; run.z0 = za;
+        }
+      }
+      if (cover) acc = acc ? mUnionInto(acc, cover) : cover.slice();
+    }
+  }
+  for (const L of solid) flush(L, levels.at(-1));
+
+  const parts = [];
+  for (const L of solid) {
+    const mesh = mergeMeshes(runs.get(L).pieces);
+    if (mesh) parts.push({ name: `Ebene ${L.k}`, k: L.k, filament: L.filament, color: L.color, mesh, layer: L });
   }
   if (!parts.length) throw new Error("Aus dem Text ist keine druckbare Fläche entstanden.");
-  return { parts, q, reduced: q < P.q - 0.01, embed, fb, freeArea, insert: !!(MF && P.fg.insert), split, fgZ1 };
+
+  // Einlegeteile: in der Vorschau eingesetzt, in der 3MF flach unter dem Schild
+  let yNext = 1e9;
+  for (const p of parts) for (let i = 1; i < p.mesh.pos.length; i += 3) yNext = Math.min(yNext, p.mesh.pos[i]);
+  for (const [i, L] of layers.entries()) {
+    if (!L.insert) continue;
+    let prev = null;
+    for (let j = i - 1; j >= 0; j--) if (!layers[j].insert) { prev = layers[j]; break; }
+    const base = L.mode === "stacked" ? prev.T : botOver(L, prev.T);
+    const shapes = maskToShapes(L.F, W, H, q, ox, oy);
+    const mesh = extrude(shapes, base, L.T);
+    if (!mesh) continue;
+    let yMax = -1e9; for (const s of shapes) yMax = Math.max(yMax, bbox(s.outer)[3]);
+    let yMin = 1e9; for (const s of shapes) yMin = Math.min(yMin, bbox(s.outer)[1]);
+    const dy = yNext - 10 - yMax;
+    yNext = yMin + dy;
+    L.base = base;
+    parts.push({ name: `Ebene ${L.k} (Einlegeteil)`, k: L.k, filament: L.filament, color: L.color, mesh, layer: L, insert: true, exportOffset: [0, dy, -base] });
+  }
+  parts.sort((a, b) => a.k - b.k);
+
+  // für die SVG: sichtbare Fläche je Ebene
+  const svgMasks = layers.map(L => ({ L, mask: L.insert ? L.F : L.E }));
+  return { parts, layers, q, reduced: q < P.q - 0.01, svg: { svgMasks, W, H, q, ox, oy } };
 }
 
 /* ------------------------------------------------------------ 3D-Vorschau */
@@ -448,6 +565,7 @@ function thumbnail() {
   } catch (e) { return null; }
 }
 
+
 /* ------------------------------------------------------------ Ausgabe */
 function b64(typed) {
   const u8 = new Uint8Array(typed.buffer, typed.byteOffset, typed.byteLength);
@@ -462,21 +580,26 @@ function saveBlob(blob, name) {
 }
 const baseName = () => ($("#tName").value.trim() || "schriftzug").replace(/[\\/:*?"<>|]+/g, "_");
 
-// Exportlage: das Einlegeteil liegt neben dem Schild flach auf dem Druckbett
+// Exportlage: Einlegeteile liegen flach neben dem Schild auf dem Druckbett
 function shifted(p) {
   if (!p.exportOffset) return p.mesh.pos;
   const [dx, dy, dz] = p.exportOffset, out = new Float32Array(p.mesh.pos.length);
   for (let i = 0; i < out.length; i += 3) { out[i] = p.mesh.pos[i] + dx; out[i + 1] = p.mesh.pos[i + 1] + dy; out[i + 2] = p.mesh.pos[i + 2] + dz; }
   return out;
 }
+function minZ(pos) { let z = Infinity; for (let i = 2; i < pos.length; i += 3) if (pos[i] < z) z = pos[i]; return z; }
+// Beginnt ein Teil über dem Druckbett, muss alles ein Objekt sein: Slicer setzen
+// jedes Objekt beim Laden auf die Druckplatte und würden es absenken.
+function floating() { return !!current && current.parts.some(p => minZ(shifted(p)) > 1e-3); }
 
 async function download3mf() {
   if (!current) return;
   const err = $("#tError"); err.hidden = true;
   const go = $("#tGo"); go.disabled = true; go.textContent = "3MF wird gepackt …";
   try {
+    const anyInsert = current.parts.some(p => p.insert);
     const body = {
-      title: baseName(), separate: current.insert || (!$("#tAssembly").checked && !floating()), thumbnail: thumbnail(),
+      title: baseName(), separate: (anyInsert || !$("#tAssembly").checked) && !floating(), thumbnail: thumbnail(),
       parts: current.parts.map(p => ({ name: p.name, filament: p.filament, color: p.color, verts: b64(shifted(p)), faces: b64(p.mesh.idx), layers: p.mesh.layers || null })),
     };
     const r = await fetch("api/schriftzug", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -488,18 +611,48 @@ async function download3mf() {
   } finally { go.disabled = false; go.textContent = "3MF herunterladen"; }
 }
 
-// SVG mit beiden Ebenen in ihren Farben (LightBurn legt je Farbe eine Ebene an)
+// SVG mit allen Ebenen in ihren Farben, von hinten nach vorne (LightBurn legt je Farbe eine Ebene an)
 function downloadSvg() {
   if (!current) return;
+  const S = current.svg;
+  const groups = S.svgMasks.map(({ L, mask }) => ({ L, shapes: maskToShapes(mask, S.W, S.H, S.q, S.ox, S.oy) }));
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-  for (const p of current.parts) for (const s of p.shapes) { const b = bbox(s.outer); x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[2]); y1 = Math.max(y1, b[3]); }
+  for (const gr of groups) for (const s of gr.shapes) { const b = bbox(s.outer); x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[2]); y1 = Math.max(y1, b[3]); }
   const W = x1 - x0, H = y1 - y0, f = (v) => v.toFixed(3);
   const ring = (p) => { let d = ""; for (let i = 0; i < p.length; i += 2) d += (i ? "L" : "M") + f(p[i] - x0) + " " + f(y1 - p[i + 1]); return d + "Z"; };
-  const groups = current.parts.map(p =>
-    `<g id="${p.name}" fill="${p.color}" fill-rule="evenodd" stroke="none">\n` +
-    p.shapes.map(s => `<path d="${ring(s.outer)}${s.holes.map(ring).join("")}"/>`).join("\n") + "\n</g>").join("\n");
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${f(W)}mm" height="${f(H)}mm" viewBox="0 0 ${f(W)} ${f(H)}">\n${groups}\n</svg>\n`;
+  const body = groups.map(({ L, shapes }) =>
+    `<g id="Ebene_${L.k}" fill="${L.color}" fill-rule="evenodd" stroke="none">\n` +
+    shapes.map(s => `<path d="${ring(s.outer)}${s.holes.map(ring).join("")}"/>`).join("\n") + "\n</g>").join("\n");
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${f(W)}mm" height="${f(H)}mm" viewBox="0 0 ${f(W)} ${f(H)}">\n${body}\n</svg>\n`;
   saveBlob(new Blob([svg], { type: "image/svg+xml" }), baseName() + ".svg");
+}
+
+/* ------------------------------------------------------------ Anleitung */
+function howto(res) {
+  const steps = [];
+  const inserts = res.parts.filter(p => p.insert);
+  steps.push("Öffne die 3MF-Datei in Bambu Studio, Orca Slicer oder PrusaSlicer. Jede Ebene ist ihrem Filament-Platz schon zugeordnet; übernimmt dein Slicer das nicht, weise sie in der Objektliste zu.");
+  const lines = [];
+  for (const L of res.layers.slice(1)) {
+    const name = `Ebene ${L.k}`;
+    if (L.insert) {
+      const th = L.T - L.base;
+      lines.push(`${name} ist ein Einlegeteil (${de(th)} mm dick)` + (L.mode === "stacked" ? ", es wird aufgeklebt."
+        : L.mode === "through" ? `, die Aussparung geht ganz durch, Spiel ${de(L.clearance, 2)} mm.`
+        : `, Aussparung ${de(L.embed)} mm tief, Spiel ${de(L.clearance, 2)} mm. Klemmt es, das Spiel erhöhen.`));
+      continue;
+    }
+    const where = L.mode === "stacked" ? "liegt auf den Ebenen dahinter auf" : L.mode === "through" ? "reicht vor den Ebenen dahinter bis aufs Druckbett" : `sitzt ${de(L.embed)} mm tief in den Ebenen dahinter`;
+    let s = `${name} ${where}`;
+    if (L.freeBot !== undefined) s += L.freeBot <= 1e-3 ? "; wo nichts dahinter ist, reicht sie bis aufs Druckbett." : `; wo nichts dahinter ist, beginnt sie erst in ${de(L.freeBot)} mm Höhe und braucht Stützen.`;
+    else s += ".";
+    lines.push(s);
+  }
+  steps.push(...lines);
+  if (inserts.length) steps.push(`Die Einlegeteile liegen unter dem Schild flach auf dem Druckbett. Für getrennte Drucke in Bambu Studio weitere Platten anlegen und die Teile hinüberziehen. Mit Sekundenkleber oder 2K-Kleber einsetzen.`);
+  const needSupport = res.layers.some(L => !L.insert && L.freeBot > 1e-3);
+  steps.push(needSupport ? "Schichthöhe 0,2 mm, 3 Wände, Stützen „Baum“ nur auf der Druckplatte." : "Schichthöhe 0,2 mm, 3 Wände, keine Stützen. Liegend drucken.");
+  return steps;
 }
 
 /* ------------------------------------------------------------ Ablauf */
@@ -519,33 +672,13 @@ async function run() {
     resizeView();
     const size = showParts(res.parts);
     $("#tLegend").innerHTML = res.parts.map((p, i) =>
-      `<li><span class="sw" style="background:${p.color}"></span><span>Filament ${i + 1}: ${esc(p.filament)}</span><span class="pc">${p.name}</span></li>`).join("");
+      `<li><span class="sw" style="background:${p.color}"></span><span>Filament ${i + 1}: ${esc(p.filament)}</span><span class="pc">${esc(p.name)}</span></li>`).join("");
     const tris = res.parts.reduce((s, p) => s + p.mesh.idx.length / 3, 0);
     $("#tStats").innerHTML = [["Größe", `${de(size.x)} × ${de(size.y)} × ${de(size.z)} mm`], ["Dreiecke", tris.toLocaleString("de-DE")]]
       .map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
-    const e = res.embed;
-    const fgPart = res.parts.find(p => p.name !== "Hintergrund");
-    const fgOnBed = fgPart && res.freeArea && res.fb <= 1e-3;
-    const steps = res.insert ? [
-      "Die 3MF enthält zwei Objekte: das Schild mit Aussparung und daneben das flache Einlegeteil. Für getrennte Drucke in Bambu Studio eine zweite Platte anlegen und das Einlegeteil hinüberziehen.",
-      `Einlegeteil ${de(res.fgZ1 - res.split)} mm dick, ` + (res.split < P.bg.thick - 1e-6
-        ? (res.split > 1e-6 ? `Aussparung ${de(P.bg.thick - res.split)} mm tief` : "Aussparung geht ganz durch")
-        : "keine Aussparung, das Teil wird aufgeklebt") + (res.split < P.bg.thick - 1e-6 ? `, Spiel ${de(P.fg.clearance, 2)} mm je Seite. Klemmt es, das Spiel erhöhen.` : "."),
-      "Beide Teile liegend mit der Oberseite nach oben drucken, keine Stützen. Das Einlegeteil mit Sekundenkleber oder 2K-Kleber einsetzen.",
-    ] : [
-      "Öffne die 3MF-Datei in Bambu Studio, Orca Slicer oder PrusaSlicer. Die Teile sind ihren Filament-Plätzen schon zugeordnet; übernimmt dein Slicer das nicht, weise sie in der Objektliste zu.",
-      e >= P.bg.thick - 1e-6 ? "Beide Teile stehen auf dem Druckbett, der Hintergrund ist unter der kleinen Zeile ausgespart."
-        : fgOnBed ? (e === 0 ? "Die kleine Zeile liegt auf den großen Buchstaben auf." : `Vor den großen Buchstaben sitzt die kleine Zeile ${de(e)} mm tief.`)
-            + " Wo sie über die Buchstaben hinausragt, reicht sie bis aufs Druckbett."
-        : e === 0 ? "Die kleine Zeile liegt oben auf: Farbwechsel gibt es nur in den obersten Schichten, das spart Spülmaterial."
-        : `Die kleine Zeile sitzt ${de(e)} mm tief im Hintergrund. Farbwechsel beginnen erst ab ${de(P.bg.thick - e)} mm Höhe.`,
-      res.freeArea && res.fb > 1e-3
-        ? `Außerhalb der großen Buchstaben beginnt die kleine Zeile erst in ${de(res.fb)} mm Höhe und hängt in der Luft: im Slicer Stützen aktivieren (z. B. „Baum“, nur auf Druckplatte). Schichthöhe 0,2 mm, 3 Wände.`
-        : "Schichthöhe 0,2 mm, 3 Wände, keine Stützen. Liegend drucken.",
-    ];
-    $("#tHowto").innerHTML = steps.map(s => `<li>${esc(s)}</li>`).join("");
+    $("#tHowto").innerHTML = howto(res).map(s => `<li>${esc(s)}</li>`).join("");
     $("#tResult").hidden = false;
-    modeHint();
+    hints();
     status.textContent = `Vorschau aktualisiert in ${Math.round(performance.now() - t0)} ms` + (res.reduced ? " · Auflösung wegen der Größe reduziert" : "");
   } catch (e) {
     console.error(e);
@@ -560,11 +693,32 @@ function loadScript(src) {
   return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("Konnte " + src + " nicht laden.")); document.head.appendChild(s); });
 }
 
+function hints() {
+  const n = layerCount();
+  for (let k = 1; k <= MAXL; k++) $(`#t${k}Card`).hidden = k > n;
+  for (let k = 2; k <= MAXL; k++) {
+    const m = (document.querySelector(`input[name=t${k}Mode]:checked`) || { value: "embedded" }).value;
+    const ins = $(`#t${k}Insert`).checked;
+    $(`#t${k}EmbedRow`).hidden = m !== "embedded";
+    $(`#t${k}ClearanceRow`).hidden = !ins;
+    $(`#t${k}ToBedRow`).hidden = ins;
+    $(`#t${k}DepthRow`).hidden = ins || $(`#t${k}ToBed`).checked;
+  }
+  const fl = floating();
+  const anyInsert = current ? current.parts.some(p => p.insert) : false;
+  $("#tAssembly").disabled = fl;
+  $("#tAssemblyRow").hidden = anyInsert;
+  $("#tAssemblyHint").hidden = !fl;
+}
+
+function allFontSelects() { return $$("#modeText select[id$=Font]"); }
+
 async function activate() {
   if (started) return;
   started = true;
-  fillFontSelect($("#tBgFont"), "Anton|400");
-  fillFontSelect($("#tFgFont"), "Pacifico|400");
+  const anchor = $("#tOut");
+  for (let k = 1; k <= MAXL; k++) anchor.insertAdjacentHTML("beforebegin", layerCard(k));
+  for (const sel of allFontSelects()) fillFontSelect(sel, sel.dataset.def);
   FONTS.forEach(linkFont);
   try {
     if (!window.THREE) await loadScript(THREE_URL);
@@ -577,14 +731,9 @@ async function activate() {
   $$("#tForm input, #tForm select").forEach(el => {
     if (["tName", "tGfName", "tFontFile", "tAssembly"].includes(el.id)) return;
     el.addEventListener("input", schedule);
-    el.addEventListener("change", schedule);
+    el.addEventListener("change", () => { hints(); schedule(); });
   });
-  $$("input[name=tMode]").forEach(el => el.addEventListener("change", modeHint));
-  $("#tBgThick").addEventListener("input", modeHint);
-  $("#tFgText").addEventListener("input", modeHint);
-  $("#tFgToBed").addEventListener("change", modeHint);
-  $("#tInsert").addEventListener("change", modeHint);
-  modeHint();
+  hints();
   $("#tForm").addEventListener("submit", (e) => { e.preventDefault(); download3mf(); });
   $("#tSvg").addEventListener("click", downloadSvg);
   $$("[data-tupload]").forEach(b => b.addEventListener("click", () => { uploadTarget = b.dataset.tupload; $("#tFontFile").value = ""; $("#tFontFile").click(); }));
@@ -593,32 +742,8 @@ async function activate() {
   $("#tGfName").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addGoogleFont(); } });
   run();
 }
-// Beginnt ein Teil über dem Druckbett, muss alles ein Objekt sein: Slicer setzen
-// jedes Objekt beim Laden auf die Druckplatte und würden die kleine Zeile absenken.
-function minZ(mesh) { let z = Infinity; for (let i = 2; i < mesh.pos.length; i += 3) if (mesh.pos[i] < z) z = mesh.pos[i]; return z; }
-function floating() {
-  return !!current && current.parts.some(p => minZ(p.mesh) > 1e-3);
-}
-function modeHint() {
-  const m = document.querySelector("input[name=tMode]:checked").value;
-  const fl = floating();
-  $("#tAssembly").disabled = fl;
-  const ins = $("#tInsert").checked;
-  $("#tClearanceRow").hidden = !ins;
-  $("#tFgToBedRow").hidden = ins;
-  $("#tFgDepthRow").hidden = ins || $("#tFgToBed").checked;
-  $("#tAssemblyRow").hidden = ins;
-  $("#tAssemblyHint").hidden = !fl || $("#tInsert").checked;
-  $("#tEmbedRow").hidden = m !== "embedded";
-  $("#tFgEmbed").max = String(num("tBgThick", 5));
-  $("#tModeHint").textContent = {
-    stacked: "Vor den großen Buchstaben liegt die kleine Zeile oben auf.",
-    embedded: "Die Einbettungstiefe zählt von der Oberseite der großen Buchstaben nach unten, höchstens bis zu ihrer Dicke.",
-    through: "Vor den großen Buchstaben reicht die kleine Zeile durch den ganzen Hintergrund bis aufs Druckbett.",
-  }[m];
-}
 
-let uploadTarget = "Bg";
+let uploadTarget = "1";
 async function addFontFile(file) {
   try {
     const fam = "Eigene – " + file.name.replace(/\.[^.]+$/, "");
@@ -626,8 +751,8 @@ async function addFontFile(file) {
     await ff.load(); document.fonts.add(ff);
     const o = { f: fam, w: 400, g: "Eigene Schriften", custom: true };
     fontMap.set(fontKey(o), o);
-    fillFontSelect($("#tBgFont")); fillFontSelect($("#tFgFont"));
-    $("#t" + uploadTarget + "Font").value = fontKey(o);
+    for (const sel of allFontSelects()) fillFontSelect(sel);
+    $(`#t${uploadTarget}Font`).value = fontKey(o);
     schedule();
   } catch (e) { $("#tError").textContent = "Die Schriftdatei konnte nicht gelesen werden."; $("#tError").hidden = false; }
 }
@@ -641,8 +766,8 @@ async function addGoogleFont() {
     new Promise(r => setTimeout(() => r(false), 6000))]);
   if (!ok) { linked.delete(fontKey(o)); hint.textContent = `„${name}“ gibt es bei Google Fonts nicht (genaue Schreibweise beachten).`; return; }
   fontMap.set(fontKey(o), o);
-  fillFontSelect($("#tBgFont")); fillFontSelect($("#tFgFont"));
-  hint.textContent = `„${name}“ steht jetzt in beiden Listen.`;
+  for (const sel of allFontSelects()) fillFontSelect(sel);
+  hint.textContent = `„${name}“ steht jetzt in allen Schriftlisten.`;
   $("#tGfName").value = "";
 }
 
