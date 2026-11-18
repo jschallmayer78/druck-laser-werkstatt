@@ -272,7 +272,8 @@ function params() {
           color: $("#tBgColor").value.toUpperCase(), filament: $("#tBgName").value.trim() || "Hintergrund" },
     fg: { text: $("#tFgText").value, font: fontMap.get($("#tFgFont").value), height: num("tFgHeight", 30),
           over: Math.max(0, num("tFgOver", 2)), embed: Math.max(0, num("tFgEmbed", 2)),
-          toBed: $("#tFgToBed").checked, depth: Math.max(0.4, num("tFgDepth", 4)), x: num("tFgX", 0), y: num("tFgY", 0), spacing: num("tFgSpacing", 0),
+          toBed: $("#tFgToBed").checked, depth: Math.max(0.4, num("tFgDepth", 4)),
+          insert: $("#tInsert").checked, clearance: Math.max(0, num("tClearance", 0.15)), x: num("tFgX", 0), y: num("tFgY", 0), spacing: num("tFgSpacing", 0),
           grow: Math.max(0, num("tFgGrow", 0)), rim: Math.max(0, num("tFgRim", 0)),
           color: $("#tFgColor").value.toUpperCase(), filament: $("#tFgName").value.trim() || "Vordergrund" },
     mode: document.querySelector("input[name=tMode]:checked").value,
@@ -321,7 +322,17 @@ async function generate(P) {
     if (MB) drawLine(g, P.bg, MB, q, bx, by, P.bg.grow);
     if (MF && P.fg.rim > 0) drawLine(g, P.fg, MF, q, fx, fy, P.fg.grow + P.fg.rim);   // Rand
   }
-  if (MF) { cutOut(gb, gf); cutOut(gs, gfree); }
+  if (MF && P.fg.insert) {
+    // Einlegeteil: Aussparung mit Spiel in die großen Buchstaben, darunter voller Boden
+    for (const g of [gb, gs]) g.clearRect(0, 0, W, H);
+    for (const g of [gb, gs]) {
+      if (MB) drawLine(g, P.bg, MB, q, bx, by, P.bg.grow);
+      if (P.fg.rim > 0) drawLine(g, P.fg, MF, q, fx, fy, P.fg.grow + P.fg.rim);
+    }
+    const gc = mk();
+    drawLine(gc, P.fg, MF, q, fx, fy, P.fg.grow + P.fg.clearance);
+    cutOut(gb, gc);
+  } else if (MF) { cutOut(gb, gf); cutOut(gs, gfree); }
   const alphaOf = (g) => {
     const d = g.getImageData(0, 0, W, H).data, a = new Uint8Array(W * H);
     for (let i = 0, j = 3; i < a.length; i++, j += 4) a[i] = d[j];
@@ -346,7 +357,18 @@ async function generate(P) {
   // Druckbett oder eigene Tiefe (gemessen von ihrer Oberseite)
   const fb = P.fg.toBed ? 0 : Math.min(fgZ1 - 0.2, Math.max(0, fgZ1 - P.fg.depth));
   let freeArea = false;
-  if (MF) {
+  if (MF && P.fg.insert) {
+    // flaches Einlegeteil; in der Vorschau eingesetzt, in der 3MF daneben auf dem Druckbett
+    const shapes = maskToShapes(alphaOf(gf), W, H, q, ox, oy);
+    const mesh = extrude(shapes, split, fgZ1);
+    if (mesh) {
+      let fgMaxY = -1e9, bgMinY = 1e9;
+      for (const s of shapes) fgMaxY = Math.max(fgMaxY, bbox(s.outer)[3]);
+      for (const s of (parts[0] ? parts[0].shapes : [])) bgMinY = Math.min(bgMinY, bbox(s.outer)[1]);
+      const dy = parts.length ? bgMinY - fgMaxY - 10 : 0;
+      parts.push({ name: "Einlegeteil", filament: P.fg.filament, color: P.fg.color, shapes, mesh, exportOffset: [0, dy, -split] });
+    }
+  } else if (MF) {
     // Lagen übereinander, der Server vereinigt sie zu einem Körper:
     //   vor den Buchstaben: Boden der Vertiefung (split) bis Oberkante
     //   außerhalb:          fb bis Oberkante
@@ -370,7 +392,7 @@ async function generate(P) {
     if (mesh) parts.push({ name: "Vordergrund", filament: P.fg.filament, color: P.fg.color, shapes, mesh });
   }
   if (!parts.length) throw new Error("Aus dem Text ist keine druckbare Fläche entstanden.");
-  return { parts, q, reduced: q < P.q - 0.01, embed, fb, freeArea };
+  return { parts, q, reduced: q < P.q - 0.01, embed, fb, freeArea, insert: !!(MF && P.fg.insert), split, fgZ1 };
 }
 
 /* ------------------------------------------------------------ 3D-Vorschau */
@@ -440,14 +462,22 @@ function saveBlob(blob, name) {
 }
 const baseName = () => ($("#tName").value.trim() || "schriftzug").replace(/[\\/:*?"<>|]+/g, "_");
 
+// Exportlage: das Einlegeteil liegt neben dem Schild flach auf dem Druckbett
+function shifted(p) {
+  if (!p.exportOffset) return p.mesh.pos;
+  const [dx, dy, dz] = p.exportOffset, out = new Float32Array(p.mesh.pos.length);
+  for (let i = 0; i < out.length; i += 3) { out[i] = p.mesh.pos[i] + dx; out[i + 1] = p.mesh.pos[i + 1] + dy; out[i + 2] = p.mesh.pos[i + 2] + dz; }
+  return out;
+}
+
 async function download3mf() {
   if (!current) return;
   const err = $("#tError"); err.hidden = true;
   const go = $("#tGo"); go.disabled = true; go.textContent = "3MF wird gepackt …";
   try {
     const body = {
-      title: baseName(), separate: !$("#tAssembly").checked && !floating(), thumbnail: thumbnail(),
-      parts: current.parts.map(p => ({ name: p.name, filament: p.filament, color: p.color, verts: b64(p.mesh.pos), faces: b64(p.mesh.idx), layers: p.mesh.layers || null })),
+      title: baseName(), separate: current.insert || (!$("#tAssembly").checked && !floating()), thumbnail: thumbnail(),
+      parts: current.parts.map(p => ({ name: p.name, filament: p.filament, color: p.color, verts: b64(shifted(p)), faces: b64(p.mesh.idx), layers: p.mesh.layers || null })),
     };
     const r = await fetch("api/schriftzug", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(typeof j.detail === "string" ? j.detail : "Die 3MF konnte nicht erzeugt werden."); }
@@ -494,9 +524,15 @@ async function run() {
     $("#tStats").innerHTML = [["Größe", `${de(size.x)} × ${de(size.y)} × ${de(size.z)} mm`], ["Dreiecke", tris.toLocaleString("de-DE")]]
       .map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
     const e = res.embed;
-    const fgPart = res.parts.find(p => p.name === "Vordergrund");
+    const fgPart = res.parts.find(p => p.name !== "Hintergrund");
     const fgOnBed = fgPart && res.freeArea && res.fb <= 1e-3;
-    const steps = [
+    const steps = res.insert ? [
+      "Die 3MF enthält zwei Objekte: das Schild mit Aussparung und daneben das flache Einlegeteil. Für getrennte Drucke in Bambu Studio eine zweite Platte anlegen und das Einlegeteil hinüberziehen.",
+      `Einlegeteil ${de(res.fgZ1 - res.split)} mm dick, ` + (res.split < P.bg.thick - 1e-6
+        ? (res.split > 1e-6 ? `Aussparung ${de(P.bg.thick - res.split)} mm tief` : "Aussparung geht ganz durch")
+        : "keine Aussparung, das Teil wird aufgeklebt") + (res.split < P.bg.thick - 1e-6 ? `, Spiel ${de(P.fg.clearance, 2)} mm je Seite. Klemmt es, das Spiel erhöhen.` : "."),
+      "Beide Teile liegend mit der Oberseite nach oben drucken, keine Stützen. Das Einlegeteil mit Sekundenkleber oder 2K-Kleber einsetzen.",
+    ] : [
       "Öffne die 3MF-Datei in Bambu Studio, Orca Slicer oder PrusaSlicer. Die Teile sind ihren Filament-Plätzen schon zugeordnet; übernimmt dein Slicer das nicht, weise sie in der Objektliste zu.",
       e >= P.bg.thick - 1e-6 ? "Beide Teile stehen auf dem Druckbett, der Hintergrund ist unter der kleinen Zeile ausgespart."
         : fgOnBed ? (e === 0 ? "Die kleine Zeile liegt auf den großen Buchstaben auf." : `Vor den großen Buchstaben sitzt die kleine Zeile ${de(e)} mm tief.`)
@@ -547,6 +583,7 @@ async function activate() {
   $("#tBgThick").addEventListener("input", modeHint);
   $("#tFgText").addEventListener("input", modeHint);
   $("#tFgToBed").addEventListener("change", modeHint);
+  $("#tInsert").addEventListener("change", modeHint);
   modeHint();
   $("#tForm").addEventListener("submit", (e) => { e.preventDefault(); download3mf(); });
   $("#tSvg").addEventListener("click", downloadSvg);
@@ -566,8 +603,12 @@ function modeHint() {
   const m = document.querySelector("input[name=tMode]:checked").value;
   const fl = floating();
   $("#tAssembly").disabled = fl;
-  $("#tFgDepthRow").hidden = $("#tFgToBed").checked;
-  $("#tAssemblyHint").hidden = !fl;
+  const ins = $("#tInsert").checked;
+  $("#tClearanceRow").hidden = !ins;
+  $("#tFgToBedRow").hidden = ins;
+  $("#tFgDepthRow").hidden = ins || $("#tFgToBed").checked;
+  $("#tAssemblyRow").hidden = ins;
+  $("#tAssemblyHint").hidden = !fl || $("#tInsert").checked;
   $("#tEmbedRow").hidden = m !== "embedded";
   $("#tFgEmbed").max = String(num("tBgThick", 5));
   $("#tModeHint").textContent = {
