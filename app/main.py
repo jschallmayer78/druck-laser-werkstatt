@@ -15,12 +15,16 @@ from pathlib import Path
 from typing import List, Literal, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
+import numpy as np
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .engrave import background as engrave_bg
 from .engrave.process import MATERIALS, run as engrave_run
+from .litho.common import Obj, Part
+from .litho.export3mf import write_3mf
 from .litho.generate import run
 
 MAX_FILES = int(os.getenv("MAX_FILES", "6"))
@@ -50,6 +54,7 @@ SLOTS = threading.Semaphore(MAX_PARALLEL)
 STATIC = Path(__file__).parent / "static"
 
 app = FastAPI(title="Lithophane-Werkstatt")
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
 class Filament(BaseModel):
@@ -253,3 +258,79 @@ def engrave_download(job: str, kind: Literal["raster", "grau"], name: str = "gra
         raise HTTPException(404, "Die Datei ist abgelaufen. Bitte neu erzeugen.")
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", name)[:90] or "gravur.png"
     return FileResponse(path, media_type="image/png", filename=safe)
+
+
+# ---------------------------------------------------------------- Schriftzug
+# Die Geometrie entsteht im Browser (Schriften werden dort gerendert); der
+# Server packt die fertigen Netze in dieselbe 3MF wie die Lithophanes, also
+# mit Filament-Zuordnung für PrusaSlicer, Orca Slicer und Bambu Studio.
+
+MAX_TEXT_VERTS = 3_000_000
+MAX_TEXT_FACES = 6_000_000
+
+
+class TextPart(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    filament: str = Field("", max_length=30)
+    color: str
+    verts: str   # base64, float32 little endian, x y z je Punkt (mm)
+    faces: str   # base64, uint32 little endian, drei Punktindizes je Dreieck
+
+    @field_validator("color")
+    @classmethod
+    def hex_color(cls, v):
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", v):
+            raise ValueError("Farbe muss als #RRGGBB angegeben werden")
+        return v
+
+
+class TextModel(BaseModel):
+    title: str = Field("schriftzug", max_length=60)
+    separate: bool = True                     # getrennte Objekte statt ein Objekt mit Teilen
+    parts: List[TextPart] = Field(min_length=1, max_length=4)
+    thumbnail: Optional[str] = Field(None, max_length=3_000_000)  # data:image/png;base64,...
+
+
+def _decode_mesh(part):
+    try:
+        v = np.frombuffer(base64.b64decode(part.verts, validate=True), dtype="<f4")
+        f = np.frombuffer(base64.b64decode(part.faces, validate=True), dtype="<u4")
+    except ValueError:
+        raise HTTPException(422, f"{part.name}: Geometrie ist nicht lesbar.")
+    if v.size == 0 or v.size % 3 or f.size == 0 or f.size % 3:
+        raise HTTPException(422, f"{part.name}: Geometrie ist unvollständig.")
+    v = v.reshape(-1, 3).astype(np.float64)
+    f = f.reshape(-1, 3).astype(np.int64)
+    if len(v) > MAX_TEXT_VERTS or len(f) > MAX_TEXT_FACES:
+        raise HTTPException(413, f"{part.name}: zu viele Dreiecke. Bitte eine gröbere Auflösung wählen.")
+    if not np.isfinite(v).all() or f.max() >= len(v):
+        raise HTTPException(422, f"{part.name}: Geometrie ist fehlerhaft.")
+    return v, f
+
+
+@app.post("/api/schriftzug")
+def schriftzug(model: TextModel):
+    meshes = [_decode_mesh(p) for p in model.parts]
+    parts = [Part(name=p.name, slot=i + 1, verts=v, faces=f)
+             for i, (p, (v, f)) in enumerate(zip(model.parts, meshes))]
+    title = model.title.strip() or "schriftzug"
+    objects = [Obj(name=p.name, parts=[p]) for p in parts] if model.separate else [Obj(name=title, parts=parts)]
+    slots = [((p.filament.strip() or p.name), p.color.upper()) for p in model.parts]
+
+    thumb = None
+    if model.thumbnail and model.thumbnail.startswith("data:image/png;base64,"):
+        try:
+            thumb = base64.b64decode(model.thumbnail.split(",", 1)[1], validate=True)
+        except ValueError:
+            thumb = None
+
+    if not SLOTS.acquire(timeout=300):
+        raise HTTPException(503, "Gerade laufen zu viele Berechnungen. Bitte in einer Minute erneut versuchen.")
+    try:
+        data = write_3mf(objects, slots, thumbnail_png=thumb, arrange=False, title=title)
+    finally:
+        SLOTS.release()
+
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", title)[:60] or "schriftzug"
+    return Response(data, media_type="model/3mf",
+                    headers={"Content-Disposition": f'attachment; filename="{safe}.3mf"'})

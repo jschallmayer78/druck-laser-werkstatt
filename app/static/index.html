@@ -153,6 +153,16 @@ summary { cursor: pointer; font-family: var(--display); font-weight: 700; }
 .dls { display: grid; gap: 8px; }
 .dl.alt { background: var(--surface); color: var(--ink); border: 2px solid var(--amber); }
 .single img { max-width: 100%; max-height: 420px; border-radius: 4px; box-shadow: 0 0 50px rgba(255, 255, 255, .08); }
+/* Schriftzug */
+#tView { width: 100%; height: 420px; position: relative; z-index: 1; cursor: grab; }
+#tView canvas { display: block; border-radius: var(--radius-s); }
+.tpick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.tpick .btn2, .btn2 { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 8px 12px; cursor: pointer; }
+.btn2:hover { border-color: var(--amber); }
+label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
+.textin { font-size: 1.15rem !important; }
+.viewhint { color: #9FB0C2; font-size: .85rem; margin: 10px 0 0; text-align: center; position: relative; z-index: 1; }
+.go.alt { background: var(--surface); color: var(--ink); border: 2px solid var(--ink); margin-top: 10px; font-size: 1rem; padding: 11px 20px; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -161,11 +171,13 @@ summary { cursor: pointer; font-family: var(--display); font-weight: 700; }
   <header>
     <h1>Lithophane-Werkstatt</h1>
     <p id="introLitho">Aus deinen Fotos wird ein 3D-Druck, der erst im Gegenlicht sein Bild zeigt. Als Lampenschirm oder flache Platte, in Weiß oder in Farbe.</p>
+    <p id="introText" hidden>Aus zwei Textzeilen wird ein Schriftzug für den 3D-Druck: große Buchstaben hinten, eine kleinere Zeile davor, jede in ihrer eigenen Farbe.</p>
     <p id="introLaser" hidden>Aus deinem Foto wird eine Gravurvorlage für den Laser, passend aufbereitet für Schiefer, Holz, Leder oder eloxiertes Aluminium.</p>
   </header>
 
   <div class="modes" role="tablist" aria-label="Werkzeug">
     <button type="button" role="tab" id="tabLitho" aria-controls="modeLitho" aria-selected="true">Lithophane (3D-Druck)</button>
+    <button type="button" role="tab" id="tabText" aria-controls="modeText" aria-selected="false">Schriftzug (3D-Druck)</button>
     <button type="button" role="tab" id="tabLaser" aria-controls="modeLaser" aria-selected="false">Lasergravur</button>
   </div>
 
@@ -277,6 +289,100 @@ summary { cursor: pointer; font-family: var(--display); font-weight: 700; }
         <div class="stats" id="stats"></div>
         <h3>So geht es weiter</h3>
         <ol id="howto"></ol>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid" id="modeText" role="tabpanel" aria-labelledby="tabText" hidden>
+    <form id="tForm" novalidate>
+      <ol class="steps">
+        <li class="step done">
+          <h2>Große Zeile (Hintergrund)</h2>
+          <label class="f">Text<input type="text" id="tBgText" class="textin" value="ZUHAUSE" maxlength="60"></label>
+          <div class="tpick sub">
+            <label class="f">Schriftart<select id="tBgFont"></select></label>
+            <button type="button" class="btn2" data-tupload="Bg">Eigene Schrift …</button>
+          </div>
+          <div class="fields">
+            <label class="f">Buchstabenhöhe (mm)<input type="number" id="tBgHeight" value="50" min="5" max="400" step="1"></label>
+            <label class="f">Dicke (mm)<input type="number" id="tBgThick" value="5" min="0.6" max="50" step="0.2"></label>
+            <label class="f">Buchstabenabstand (mm)<input type="number" id="tBgSpacing" value="0" min="-20" max="50" step="0.5"></label>
+            <label class="f">Verstärkung (mm)<input type="number" id="tBgGrow" value="0" min="0" max="20" step="0.5"></label>
+            <label class="f">Farbe<input type="color" id="tBgColor" value="#F1EDE4"></label>
+            <label class="f">Filament<input type="text" id="tBgName" value="Weiß" maxlength="30"></label>
+          </div>
+          <p class="hint">Verstärkung macht die Buchstaben ringsum dicker; nahe Buchstaben verschmelzen dann zu einem Teil.</p>
+        </li>
+
+        <li class="step done">
+          <h2>Kleine Zeile (Vordergrund)</h2>
+          <label class="f">Text<input type="text" id="tFgText" class="textin" value="Willkommen" maxlength="60"></label>
+          <div class="tpick sub">
+            <label class="f">Schriftart<select id="tFgFont"></select></label>
+            <button type="button" class="btn2" data-tupload="Fg">Eigene Schrift …</button>
+          </div>
+          <div class="fields">
+            <label class="f">Buchstabenhöhe (mm)<input type="number" id="tFgHeight" value="30" min="3" max="400" step="1"></label>
+            <label class="f" id="tOverLabel">Überstand (mm)<input type="number" id="tFgOver" value="2" min="0" max="50" step="0.2"></label>
+            <label class="f">Versatz waagrecht (mm)<input type="number" id="tFgX" value="0" step="1"></label>
+            <label class="f">Versatz senkrecht (mm)<input type="number" id="tFgY" value="-6" step="1"></label>
+            <label class="f">Buchstabenabstand (mm)<input type="number" id="tFgSpacing" value="0" min="-20" max="50" step="0.5"></label>
+            <label class="f">Verstärkung (mm)<input type="number" id="tFgGrow" value="0.3" min="0" max="10" step="0.1"></label>
+            <label class="f">Rand in Hintergrundfarbe (mm)<input type="number" id="tFgRim" value="2.5" min="0" max="20" step="0.5"></label>
+            <label class="f">Farbe<input type="color" id="tFgColor" value="#C4392D"></label>
+            <label class="f">Filament<input type="text" id="tFgName" value="Rot" maxlength="30"></label>
+          </div>
+          <p class="hint">Der Rand umgibt die kleine Zeile in der Hintergrundfarbe und verbindet sie mit den großen Buchstaben. Dünne Schreibschriften mit etwas Verstärkung (0,3–0,6 mm) druckfester machen.</p>
+        </li>
+
+        <li class="step done">
+          <h2>Aufbau</h2>
+          <fieldset class="seg">
+            <legend>Aufbau</legend>
+            <label class="opt"><input type="radio" name="tMode" value="through" checked><span><b>Durchgehend</b><small>Beide Zeilen stehen auf dem Druckbett, der Hintergrund ist unter der kleinen Zeile ausgespart</small></span></label>
+            <label class="opt"><input type="radio" name="tMode" value="stacked"><span><b>Aufgesetzt</b><small>Die kleine Zeile liegt auf dem Hintergrund. Farbwechsel nur in den obersten Schichten</small></span></label>
+          </fieldset>
+          <label class="check"><input type="checkbox" id="tAssembly"><span>Als ein Objekt mit zwei Teilen speichern statt als zwei getrennte Objekte</span></label>
+          <details>
+            <summary>Feineinstellungen</summary>
+            <div class="fields">
+              <label class="f">Auflösung
+                <select id="tQuality"><option value="6">Schnell (0,17 mm)</option><option value="10" selected>Normal (0,10 mm)</option><option value="16">Fein (0,06 mm)</option></select>
+              </label>
+              <label class="f">Dateiname<input type="text" id="tName" value="schriftzug" maxlength="60"></label>
+            </div>
+            <div class="tpick sub">
+              <label class="f">Weitere Google-Schrift (Name wie auf fonts.google.com)<input type="text" id="tGfName" placeholder="z. B. Playfair Display"></label>
+              <button type="button" class="btn2" id="tGfAdd">Hinzufügen</button>
+            </div>
+            <p class="hint" id="tGfHint" aria-live="polite"></p>
+          </details>
+          <input type="file" id="tFontFile" accept=".ttf,.otf,.woff,.woff2" hidden>
+        </li>
+
+        <li class="step" id="t4">
+          <h2>Herunterladen</h2>
+          <button type="submit" class="go" id="tGo">3MF herunterladen</button>
+          <button type="button" class="go alt" id="tSvg">SVG für den Laser</button>
+          <p class="error" id="tError" role="alert" hidden></p>
+          <p class="hint" id="tStatus" aria-live="polite"></p>
+        </li>
+      </ol>
+    </form>
+
+    <section class="stage" aria-label="Vorschau Schriftzug">
+      <div class="box" id="tBox">
+        <div class="empty" id="tEmpty"><strong>Hier entsteht dein Schriftzug</strong>Die Vorschau aktualisiert sich bei jeder Änderung.</div>
+        <div id="tWrap" style="width:100%" hidden>
+          <div id="tView"></div>
+          <p class="viewhint">Ziehen dreht · Rechtsklick verschiebt · Mausrad zoomt</p>
+        </div>
+      </div>
+      <div class="result" id="tResult" hidden>
+        <ul class="legend" id="tLegend"></ul>
+        <div class="stats" id="tStats"></div>
+        <h3>So geht es weiter</h3>
+        <ol id="tHowto"></ol>
       </div>
     </section>
   </div>
@@ -557,18 +663,24 @@ function show(j, o) {
   if (window.matchMedia("(max-width: 900px)").matches) $("#box").scrollIntoView({ behavior: "smooth" });
 }
 /* ------------------------------------------------------------ Umschalter */
+const MODES = {
+  litho: { tab: "#tabLitho", panel: "#modeLitho", intro: "#introLitho", title: "Lithophane-Werkstatt", hash: "" },
+  text:  { tab: "#tabText",  panel: "#modeText",  intro: "#introText",  title: "Schriftzug – Lithophane-Werkstatt", hash: "#schriftzug" },
+  laser: { tab: "#tabLaser", panel: "#modeLaser", intro: "#introLaser", title: "Lasergravur – Lithophane-Werkstatt", hash: "#laser" },
+};
 function setMode(m) {
-  const laser = m === "laser";
-  $("#modeLitho").hidden = laser; $("#modeLaser").hidden = !laser;
-  $("#introLitho").hidden = laser; $("#introLaser").hidden = !laser;
-  $("#tabLitho").setAttribute("aria-selected", String(!laser));
-  $("#tabLaser").setAttribute("aria-selected", String(laser));
-  document.title = laser ? "Lasergravur – Lithophane-Werkstatt" : "Lithophane-Werkstatt";
-  history.replaceState(null, "", laser ? "#laser" : location.pathname + location.search);
+  for (const [k, v] of Object.entries(MODES)) {
+    const on = k === m;
+    $(v.panel).hidden = !on; $(v.intro).hidden = !on;
+    $(v.tab).setAttribute("aria-selected", String(on));
+  }
+  document.title = MODES[m].title;
+  history.replaceState(null, "", MODES[m].hash || location.pathname + location.search);
+  if (m === "text" && window.Schriftzug) window.Schriftzug.activate();
 }
-$("#tabLitho").addEventListener("click", () => setMode("litho"));
-$("#tabLaser").addEventListener("click", () => setMode("laser"));
+for (const k of Object.keys(MODES)) $(MODES[k].tab).addEventListener("click", () => setMode(k));
 if (location.hash === "#laser") setMode("laser");
+if (location.hash === "#schriftzug") setMode("text");
 
 /* ------------------------------------------------------------ Lasergravur */
 let lFile = null;
@@ -665,5 +777,6 @@ function lShow(j, o) {
   if (window.matchMedia("(max-width: 900px)").matches) $("#lBox").scrollIntoView({ behavior: "smooth" });
 }
 </script>
+<script src="static/schriftzug.js" defer></script>
 </body>
 </html>

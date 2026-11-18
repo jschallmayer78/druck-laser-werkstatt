@@ -24,6 +24,30 @@ Hinter einem Reverse Proxy funktioniert die Oberfläche auch unter einem
 Unterpfad (z. B. `/lithophane/`), weil sie nur relative Pfade nutzt.
 Ein Upload-Limit von mindestens 150 MB im Proxy einplanen.
 
+## Schriftzug
+
+Über den Umschalter oben („Schriftzug“, direkt erreichbar unter
+`/#schriftzug`) entsteht ein Schriftzug aus zwei Textzeilen: eine große Zeile
+im Hintergrund und eine kleinere Zeile davor, jede in eigener Farbe.
+
+- **Schriften:** rund 35 Google-Schriften (Block- und Schreibschriften),
+  weitere per Name hinzufügbar oder als eigene TTF/OTF/WOFF-Datei.
+- **Einstellungen je Zeile:** Text, Buchstabenhöhe in mm, Buchstabenabstand,
+  Verstärkung (macht dünne Schriften druckfester); die kleine Zeile außerdem
+  Versatz, Überstand und ein Rand in Hintergrundfarbe, der sie mit den großen
+  Buchstaben zu einem Teil verbindet.
+- **Aufbau:** *durchgehend* (beide Teile ab Druckbett, Hintergrund unter der
+  kleinen Zeile ausgespart) oder *aufgesetzt* (kleine Zeile liegt oben auf,
+  Farbwechsel nur in den obersten Schichten).
+- **Ergebnis:** 3MF mit zwei getrennten Objekten (oder auf Wunsch einem
+  Objekt mit zwei Teilen), Filament 1 = Hintergrund, Filament 2 =
+  Vordergrund, schon zugeordnet. Dazu eine SVG mit beiden Ebenen in ihren
+  Farben für Laser oder Plotter.
+
+Die Geometrie entsteht im Browser (Schriften rendern, Konturen verfolgen,
+extrudieren); die 3D-Vorschau nutzt three.js vom CDN. Der Server packt die
+Netze nur noch in die 3MF.
+
 ## Lasergravur
 
 Über den Umschalter oben („Lasergravur“, direkt erreichbar unter `/#laser`)
@@ -107,3 +131,7 @@ Lasergravur: `POST /api/engrave` (multipart: `file` = Bild, `options` =
 JSON, siehe Klasse `EngraveOptions`) liefert Vorschau, Kennzahlen und eine
 Job-ID; `GET /api/engrave/download/{id}/raster` bzw. `/grau` liefert die
 PNG-Dateien. `GET /api/engrave/info` meldet, ob Freistellen verfügbar ist.
+
+Schriftzug: `POST /api/schriftzug` (JSON, siehe Klasse `TextModel`: Teile mit
+Name, Filament, Farbe und den Netzen als Base64 – Punkte float32, Dreiecke
+uint32) liefert direkt die 3MF-Datei.

@@ -7,7 +7,7 @@
 """
 import io
 import zipfile
-from xml.sax.saxutils import quoteattr
+from xml.sax.saxutils import escape, quoteattr
 
 import numpy as np
 
@@ -29,8 +29,16 @@ RELS = """<?xml version="1.0" encoding="UTF-8"?>
 </Relationships>"""
 
 
-def _layout(objects):
-    """Objekte nebeneinander anordnen. Liefert je Objekt (verschobene Teile, Position)."""
+def _layout(objects, arrange=True):
+    """Objekte nebeneinander anordnen. Liefert je Objekt (verschobene Teile, Position).
+    arrange=False: Objekte behalten ihre Lage zueinander (z. B. Schriftzug-Ebenen)."""
+    if not arrange:
+        allv = np.concatenate([p.verts for obj in objects for p in obj.parts])
+        lo, hi = allv.min(0), allv.max(0)
+        size = hi - lo
+        placed = [[(p, p.verts - lo) for p in obj.parts] for obj in objects]
+        xy = (BED_CENTER[0] - size[0] / 2, BED_CENTER[1] - size[1] / 2)
+        return placed, [xy] * len(objects)
     placed, sizes = [], []
     for obj in objects:
         allv = np.concatenate([p.verts for p in obj.parts])
@@ -46,10 +54,10 @@ def _layout(objects):
     return placed, pos
 
 
-def write_3mf(objects, slots, thumbnail_png=None):
+def write_3mf(objects, slots, thumbnail_png=None, arrange=True, title="Lithophane"):
     """objects: Liste Obj; slots: Liste (name, '#RRGGBB') für Filament 1..n.
     Liefert die 3MF-Datei als bytes."""
-    placed, pos = _layout(objects)
+    placed, pos = _layout(objects, arrange)
     model = io.StringIO()
     w = model.write
     w('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -57,7 +65,7 @@ def write_3mf(objects, slots, thumbnail_png=None):
       'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
       'xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06">\n'
       ' <metadata name="slic3rpe:Version3mf">1</metadata>\n'
-      ' <metadata name="Title">Lithophane</metadata>\n'
+      f' <metadata name="Title">{escape(title)}</metadata>\n'
       ' <metadata name="Application">Lithophane-Werkstatt</metadata>\n'
       ' <resources>\n  <basematerials id="1">\n')
     for name, color in slots:
