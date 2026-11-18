@@ -323,7 +323,7 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
           </div>
           <div class="fields">
             <label class="f">Buchstabenhöhe (mm)<input type="number" id="tFgHeight" value="30" min="3" max="400" step="1"></label>
-            <label class="f" id="tOverLabel">Überstand (mm)<input type="number" id="tFgOver" value="2" min="0" max="50" step="0.2"></label>
+            <label class="f">Überstand über Hintergrund (mm)<input type="number" id="tFgOver" value="2" min="0" max="50" step="0.2"></label>
             <label class="f">Versatz waagrecht (mm)<input type="number" id="tFgX" value="0" step="1"></label>
             <label class="f">Versatz senkrecht (mm)<input type="number" id="tFgY" value="-6" step="1"></label>
             <label class="f">Buchstabenabstand (mm)<input type="number" id="tFgSpacing" value="0" min="-20" max="50" step="0.5"></label>
@@ -339,9 +339,14 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
           <h2>Aufbau</h2>
           <fieldset class="seg">
             <legend>Aufbau</legend>
-            <label class="opt"><input type="radio" name="tMode" value="through" checked><span><b>Durchgehend</b><small>Beide Zeilen stehen auf dem Druckbett, der Hintergrund ist unter der kleinen Zeile ausgespart</small></span></label>
-            <label class="opt"><input type="radio" name="tMode" value="stacked"><span><b>Aufgesetzt</b><small>Die kleine Zeile liegt auf dem Hintergrund. Farbwechsel nur in den obersten Schichten</small></span></label>
+            <label class="opt"><input type="radio" name="tMode" value="stacked"><span><b>Aufgesetzt</b><small>Die kleine Zeile liegt oben auf dem Hintergrund</small></span></label>
+            <label class="opt"><input type="radio" name="tMode" value="embedded" checked><span><b>Eingelassen</b><small>Die kleine Zeile sitzt in einer passgenauen Vertiefung im Hintergrund</small></span></label>
+            <label class="opt"><input type="radio" name="tMode" value="through"><span><b>Durchgehend</b><small>Beide Zeilen stehen auf dem Druckbett</small></span></label>
           </fieldset>
+          <div class="fields" id="tEmbedRow">
+            <label class="f">Einbettungstiefe (mm)<input type="number" id="tFgEmbed" value="2" min="0.2" max="50" step="0.2"></label>
+          </div>
+          <p class="hint" id="tModeHint"></p>
           <label class="check"><input type="checkbox" id="tAssembly"><span>Als ein Objekt mit zwei Teilen speichern statt als zwei getrennte Objekte</span></label>
           <details>
             <summary>Feineinstellungen</summary>

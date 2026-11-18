@@ -248,6 +248,21 @@ function extrude(shapes, z0, z1) {
   return idx.length ? { pos: new Float32Array(pos), idx: new Uint32Array(idx) } : null;
 }
 
+function mergeMeshes(list) {
+  if (!list.length) return null;
+  if (list.length === 1) return list[0];
+  const np = list.reduce((s, m) => s + m.pos.length, 0), ni = list.reduce((s, m) => s + m.idx.length, 0);
+  const pos = new Float32Array(np), idx = new Uint32Array(ni);
+  let po = 0, io = 0;
+  for (const m of list) {
+    pos.set(m.pos, po);
+    const base = po / 3;
+    for (let i = 0; i < m.idx.length; i++) idx[io + i] = m.idx[i] + base;
+    po += m.pos.length; io += m.idx.length;
+  }
+  return { pos, idx, layers: list.map(m => m.idx.length / 3) };   // Lagen verschmilzt der Server zu einem Körper
+}
+
 /* ------------------------------------------------------------ Generierung */
 const num = (id, d) => { const v = parseFloat($("#" + id).value); return isFinite(v) ? v : d; };
 function params() {
@@ -256,7 +271,7 @@ function params() {
           thick: Math.max(0.4, num("tBgThick", 5)), spacing: num("tBgSpacing", 0), grow: Math.max(0, num("tBgGrow", 0)),
           color: $("#tBgColor").value.toUpperCase(), filament: $("#tBgName").value.trim() || "Hintergrund" },
     fg: { text: $("#tFgText").value, font: fontMap.get($("#tFgFont").value), height: num("tFgHeight", 30),
-          over: Math.max(0, num("tFgOver", 2)), x: num("tFgX", 0), y: num("tFgY", 0), spacing: num("tFgSpacing", 0),
+          over: Math.max(0, num("tFgOver", 2)), embed: Math.max(0, num("tFgEmbed", 2)), x: num("tFgX", 0), y: num("tFgY", 0), spacing: num("tFgSpacing", 0),
           grow: Math.max(0, num("tFgGrow", 0)), rim: Math.max(0, num("tFgRim", 0)),
           color: $("#tFgColor").value.toUpperCase(), filament: $("#tFgName").value.trim() || "Vordergrund" },
     mode: document.querySelector("input[name=tMode]:checked").value,
@@ -268,7 +283,9 @@ async function generate(P) {
   await Promise.all([loadFont(P.bg.font, P.bg.text), loadFont(P.fg.font, P.fg.text)]);
   const MB = measureLine(P.bg), MF = measureLine(P.fg);
   if (!MB && !MF) throw new Error("Bitte mindestens eine Textzeile eingeben.");
-  const stacked = P.mode === "stacked";
+  // Einbettungstiefe: 0 = aufgesetzt, volle Dicke = durchgehend ab Druckbett
+  const T = P.bg.thick;
+  const embed = P.mode === "stacked" ? 0 : P.mode === "through" ? T : Math.min(T, Math.max(0, P.fg.embed));
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   const ext = (cx, cy, w, h, m) => { x0 = Math.min(x0, cx - w / 2 - m); x1 = Math.max(x1, cx + w / 2 + m); y0 = Math.min(y0, cy - h / 2 - m); y1 = Math.max(y1, cy + h / 2 + m); };
   if (MB) ext(0, 0, MB.w, MB.h, P.bg.grow);
@@ -281,13 +298,15 @@ async function generate(P) {
   const W = Math.ceil((x1 - x0) * q), H = Math.ceil((y1 - y0) * q);
   const ox = -x0 * q, oy = y1 * q;
   const mk = () => { const c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d", { willReadFrequently: true }); g.fillStyle = "#000"; g.strokeStyle = "#000"; return g; };
-  const gb = mk(), gf = mk();
+  const gb = mk(), gf = mk(), gs = mk();   // gb: Hintergrund mit Aussparung, gs: voll (trägt die kleine Zeile)
   const bx = ox, by = oy, fx = ox + P.fg.x * q, fy = oy - P.fg.y * q;
 
   if (MF) drawLine(gf, P.fg, MF, q, fx, fy, P.fg.grow);
-  if (MB) drawLine(gb, P.bg, MB, q, bx, by, P.bg.grow);
-  if (MF && (P.fg.rim > 0 || stacked)) drawLine(gb, P.fg, MF, q, fx, fy, P.fg.grow + P.fg.rim);
-  if (MF && !stacked) {   // Hintergrund dort aussparen, wo der Vordergrund steht
+  for (const g of [gb, gs]) {
+    if (MB) drawLine(g, P.bg, MB, q, bx, by, P.bg.grow);
+    if (MF) drawLine(g, P.fg, MF, q, fx, fy, P.fg.grow + P.fg.rim);   // Rand + Auflagefläche
+  }
+  if (MF) {   // Aussparung, in der die kleine Zeile sitzt
     gb.globalCompositeOperation = "destination-out";
     drawLine(gb, P.fg, MF, q, fx, fy, P.fg.grow);
     gb.globalCompositeOperation = "source-over";
@@ -299,19 +318,26 @@ async function generate(P) {
     for (let j = 0; j < H; j++) { a[j * W] = 0; a[j * W + W - 1] = 0; }
     return a;
   };
-  const fgZ0 = stacked ? P.bg.thick : 0;
-  const fgZ1 = stacked ? P.bg.thick + Math.max(0.2, P.fg.over) : P.bg.thick + P.fg.over;
+  const split = MF ? T - embed : T;                 // Höhe, ab der die Vertiefung beginnt
+  const fgZ0 = split;
+  const fgZ1 = T + (embed === 0 ? Math.max(0.2, P.fg.over) : P.fg.over);
   const parts = [];
-  if (MB || (MF && P.fg.rim > 0)) {
-    const shapes = maskToShapes(alphaOf(gb), W, H, q, ox, oy), mesh = extrude(shapes, 0, P.bg.thick);
-    if (mesh) parts.push({ name: "Hintergrund", filament: P.bg.filament, color: P.bg.color, shapes, mesh });
+  {
+    // unten voll (trägt die kleine Zeile), oben mit Aussparung
+    const meshes = [];
+    const cut = MF && split < T - 1e-6 ? maskToShapes(alphaOf(gb), W, H, q, ox, oy) : null;
+    const full = split > 1e-6 ? maskToShapes(alphaOf(MF ? gs : gb), W, H, q, ox, oy) : null;
+    if (full && full.length) meshes.push(extrude(full, 0, split));
+    if (cut && cut.length) meshes.push(extrude(cut, split, T));
+    const mesh = mergeMeshes(meshes.filter(Boolean));
+    if (mesh) parts.push({ name: "Hintergrund", filament: P.bg.filament, color: P.bg.color, shapes: (cut && cut.length) ? cut : full, mesh });
   }
   if (MF) {
     const shapes = maskToShapes(alphaOf(gf), W, H, q, ox, oy), mesh = extrude(shapes, fgZ0, fgZ1);
     if (mesh) parts.push({ name: "Vordergrund", filament: P.fg.filament, color: P.fg.color, shapes, mesh });
   }
   if (!parts.length) throw new Error("Aus dem Text ist keine druckbare Fläche entstanden.");
-  return { parts, q, reduced: q < P.q - 0.01 };
+  return { parts, q, reduced: q < P.q - 0.01, embed };
 }
 
 /* ------------------------------------------------------------ 3D-Vorschau */
@@ -388,7 +414,7 @@ async function download3mf() {
   try {
     const body = {
       title: baseName(), separate: !$("#tAssembly").checked, thumbnail: thumbnail(),
-      parts: current.parts.map(p => ({ name: p.name, filament: p.filament, color: p.color, verts: b64(p.mesh.pos), faces: b64(p.mesh.idx) })),
+      parts: current.parts.map(p => ({ name: p.name, filament: p.filament, color: p.color, verts: b64(p.mesh.pos), faces: b64(p.mesh.idx), layers: p.mesh.layers || null })),
     };
     const r = await fetch("api/schriftzug", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(typeof j.detail === "string" ? j.detail : "Die 3MF konnte nicht erzeugt werden."); }
@@ -434,11 +460,12 @@ async function run() {
     const tris = res.parts.reduce((s, p) => s + p.mesh.idx.length / 3, 0);
     $("#tStats").innerHTML = [["Größe", `${de(size.x)} × ${de(size.y)} × ${de(size.z)} mm`], ["Dreiecke", tris.toLocaleString("de-DE")]]
       .map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
-    const stacked = P.mode === "stacked";
+    const e = res.embed;
     const steps = [
       "Öffne die 3MF-Datei in Bambu Studio, Orca Slicer oder PrusaSlicer. Die Teile sind ihren Filament-Plätzen schon zugeordnet; übernimmt dein Slicer das nicht, weise sie in der Objektliste zu.",
-      stacked ? "Die kleine Zeile liegt oben auf: Farbwechsel gibt es nur in den obersten Schichten, das spart Spülmaterial."
-              : "Beide Teile stehen auf dem Druckbett, der Hintergrund ist unter der kleinen Zeile ausgespart.",
+      e >= P.bg.thick - 1e-6 ? "Beide Teile stehen auf dem Druckbett, der Hintergrund ist unter der kleinen Zeile ausgespart."
+        : e === 0 ? "Die kleine Zeile liegt oben auf: Farbwechsel gibt es nur in den obersten Schichten, das spart Spülmaterial."
+        : `Die kleine Zeile sitzt ${de(e)} mm tief im Hintergrund. Farbwechsel beginnen erst ab ${de(P.bg.thick - e)} mm Höhe.`,
       "Schichthöhe 0,2 mm, 3 Wände, keine Stützen. Liegend drucken.",
     ];
     if (P.fg.rim === 0 && P.fg.text.trim()) steps.push("Ohne Rand hängt die kleine Zeile nicht mit den großen Buchstaben zusammen. Für ein Teil aus einem Guss den Rand auf 2 mm oder mehr stellen.");
@@ -478,6 +505,7 @@ async function activate() {
     el.addEventListener("change", schedule);
   });
   $$("input[name=tMode]").forEach(el => el.addEventListener("change", modeHint));
+  $("#tBgThick").addEventListener("input", modeHint);
   modeHint();
   $("#tForm").addEventListener("submit", (e) => { e.preventDefault(); download3mf(); });
   $("#tSvg").addEventListener("click", downloadSvg);
@@ -488,8 +516,14 @@ async function activate() {
   run();
 }
 function modeHint() {
-  const st = document.querySelector("input[name=tMode]:checked").value === "stacked";
-  $("#tOverLabel").firstChild.textContent = st ? "Erhöhung über Hintergrund (mm)" : "Überstand (mm)";
+  const m = document.querySelector("input[name=tMode]:checked").value;
+  $("#tEmbedRow").hidden = m !== "embedded";
+  $("#tFgEmbed").max = String(num("tBgThick", 5));
+  $("#tModeHint").textContent = {
+    stacked: "Spart Farbwechsel: die zweite Farbe kommt erst in den obersten Schichten. Der Rand sollte größer als 0 sein, damit nichts in der Luft hängt.",
+    embedded: "Die Tiefe zählt von der Oberseite des Hintergrunds nach unten, höchstens bis zu seiner Dicke. Die kleine Zeile ragt zusätzlich um den Überstand heraus.",
+    through: "Die kleine Zeile reicht durch den ganzen Hintergrund bis aufs Druckbett. Am stabilsten, aber Farbwechsel ab der ersten Schicht.",
+  }[m];
 }
 
 let uploadTarget = "Bg";

@@ -17,13 +17,14 @@ from typing import List, Literal, Optional
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
+import manifold3d as m3d
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .engrave import background as engrave_bg
 from .engrave.process import MATERIALS, run as engrave_run
-from .litho.common import Obj, Part
+from .litho.common import Obj, Part, compact
 from .litho.export3mf import write_3mf
 from .litho.generate import run
 
@@ -275,6 +276,7 @@ class TextPart(BaseModel):
     color: str
     verts: str   # base64, float32 little endian, x y z je Punkt (mm)
     faces: str   # base64, uint32 little endian, drei Punktindizes je Dreieck
+    layers: Optional[List[int]] = None  # Dreiecke je Lage; mehrere Lagen werden zu einem Körper vereinigt
 
     @field_validator("color")
     @classmethod
@@ -308,9 +310,30 @@ def _decode_mesh(part):
     return v, f
 
 
+def _union_layers(v, f, layers):
+    """Aufeinanderliegende Lagen (z. B. Hintergrund mit Vertiefung) zu einem
+    geschlossenen Körper vereinigen. Klappt das nicht, bleiben die Lagen getrennt."""
+    if not layers or len(layers) < 2 or sum(layers) != len(f) or min(layers) <= 0:
+        return v, f
+    try:
+        man, start = None, 0
+        for n in layers:
+            lv, lf = compact(v, f[start:start + n])
+            start += n
+            m = m3d.Manifold(m3d.Mesh(vert_properties=lv.astype(np.float32), tri_verts=lf.astype(np.uint32)))
+            if m.status() != m3d.Error.NoError:
+                return v, f
+            man = m if man is None else man + m
+        mesh = man.to_mesh()
+        return (np.asarray(mesh.vert_properties)[:, :3].astype(np.float64),
+                np.asarray(mesh.tri_verts).astype(np.int64))
+    except Exception:
+        return v, f
+
+
 @app.post("/api/schriftzug")
 def schriftzug(model: TextModel):
-    meshes = [_decode_mesh(p) for p in model.parts]
+    meshes = [_union_layers(*_decode_mesh(p), p.layers) for p in model.parts]
     parts = [Part(name=p.name, slot=i + 1, verts=v, faces=f)
              for i, (p, (v, f)) in enumerate(zip(model.parts, meshes))]
     title = model.title.strip() or "schriftzug"

@@ -36,9 +36,12 @@ im Hintergrund und eine kleinere Zeile davor, jede in eigener Farbe.
   Verstärkung (macht dünne Schriften druckfester); die kleine Zeile außerdem
   Versatz, Überstand und ein Rand in Hintergrundfarbe, der sie mit den großen
   Buchstaben zu einem Teil verbindet.
-- **Aufbau:** *durchgehend* (beide Teile ab Druckbett, Hintergrund unter der
-  kleinen Zeile ausgespart) oder *aufgesetzt* (kleine Zeile liegt oben auf,
-  Farbwechsel nur in den obersten Schichten).
+- **Aufbau:** *aufgesetzt* (kleine Zeile liegt oben auf), *eingelassen*
+  (kleine Zeile sitzt in einer passgenauen Vertiefung, Tiefe in mm
+  einstellbar) oder *durchgehend* (beide Teile ab Druckbett). Je flacher
+  die Einbettung, desto später beginnen die Farbwechsel beim Druck. Der
+  Hintergrund wird auf dem Server mit manifold3d zu einem geschlossenen
+  Körper vereinigt.
 - **Ergebnis:** 3MF mit zwei getrennten Objekten (oder auf Wunsch einem
   Objekt mit zwei Teilen), Filament 1 = Hintergrund, Filament 2 =
   Vordergrund, schon zugeordnet. Dazu eine SVG mit beiden Ebenen in ihren
