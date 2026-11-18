@@ -57,8 +57,12 @@ eigenes Filament.
   werden. Die Ebenen dahinter bekommen eine Aussparung (Spiel einstellbar),
   das Teil liegt unter dem Schild in der 3MF und kann in Bambu Studio auf eine
   weitere Platte gezogen werden.
+- **Basisplatte (optional):** Rechteck mit Eckenradius, Oval oder entlang
+  der Kontur der Schrift, mit einstellbarem Rand und Dicke. Eigene Farbe
+  (eigener Filament-Platz) oder in der Farbe von Ebene 1. Alle Ebenen stehen
+  auf der Platte; „bis aufs Druckbett“ heißt dann „bis auf die Platte“.
 - **Ergebnis:** 3MF mit einem Objekt je Ebene (oder auf Wunsch einem Objekt
-  mit mehreren Teilen), Filament 1–4 schon zugeordnet. Beginnt eine Ebene
+  mit mehreren Teilen), Filament 1–5 schon zugeordnet. Beginnt eine Ebene
   über dem Druckbett, wird automatisch ein Objekt mit Teilen gespeichert, damit
   der Slicer sie nicht absenkt. Dazu eine SVG mit allen Ebenen in ihren Farben
   für Laser oder Plotter.

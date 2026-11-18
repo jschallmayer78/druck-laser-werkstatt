@@ -342,7 +342,15 @@ function layerParams(k) {
 function params() {
   const n = layerCount(), layers = [];
   for (let k = 1; k <= n; k++) layers.push(layerParams(k));
-  return { layers, q: parseFloat($("#tQuality").value) || 10 };
+  const v = (id, d) => { const x = parseFloat($("#" + id).value); return isFinite(x) ? x : d; };
+  const base = {
+    on: $("#tBaseOn").checked,
+    shape: (document.querySelector("input[name=tBaseShape]:checked") || { value: "rect" }).value,
+    margin: Math.max(0, v("tBaseMargin", 6)), thick: Math.max(0.4, v("tBaseThick", 3)), radius: Math.max(0, v("tBaseRadius", 6)),
+    color: $("#tBaseColor").value.toUpperCase(), filament: $("#tBaseName").value.trim() || "Basisplatte",
+    same: $("#tBaseSame").checked,
+  };
+  return { layers, base, q: parseFloat($("#tQuality").value) || 10 };
 }
 
 /* ------------------------------------------------------------ Masken (Alpha 0–255, weiche Kanten bleiben erhalten) */
@@ -384,6 +392,16 @@ async function generate(P) {
     y0 = Math.min(y0, L.y - L.M.h / 2 - m); y1 = Math.max(y1, L.y + L.M.h / 2 + m);
     hmax = Math.max(hmax, L.M.h);
   }
+  // Basisplatte (in mm, um den Inhalt herum)
+  const BP = P.base, BT = BP.on ? BP.thick : 0;
+  let bgeo = null;
+  if (BP.on) {
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, hw = (x1 - x0) / 2, hh = (y1 - y0) / 2;
+    if (BP.shape === "oval") bgeo = { cx, cy, a: hw * Math.SQRT2 + BP.margin, b: hh * Math.SQRT2 + BP.margin };
+    else if (BP.shape === "rect") bgeo = { cx, cy, a: hw + BP.margin, b: hh + BP.margin, r: Math.min(BP.radius, hw + BP.margin, hh + BP.margin) };
+    else bgeo = { cx, cy, a: hw + BP.margin, b: hh + BP.margin };
+    x0 = Math.min(x0, cx - bgeo.a); x1 = Math.max(x1, cx + bgeo.a); y0 = Math.min(y0, cy - bgeo.b); y1 = Math.max(y1, cy + bgeo.b);
+  }
   const pad = 1.5 + hmax * 0.08;
   x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
   let q = P.q;
@@ -393,19 +411,59 @@ async function generate(P) {
   const ox = -x0 * q, oy = y1 * q;
   const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
   const g = canvas.getContext("2d", { willReadFrequently: true });
-  const raster = (L, strokeMm) => {
-    g.clearRect(0, 0, W, H); g.fillStyle = "#000"; g.strokeStyle = "#000";
-    drawLine(g, L, L.M, q, ox + L.x * q, oy - L.y * q, strokeMm);
+  const readAlpha = () => {
     const d = g.getImageData(0, 0, W, H).data, a = new Uint8Array(W * H);
     for (let i = 0, j = 3; i < a.length; i++, j += 4) a[i] = d[j];
     for (let i = 0; i < W; i++) { a[i] = 0; a[(H - 1) * W + i] = 0; }
     for (let j = 0; j < H; j++) { a[j * W] = 0; a[j * W + W - 1] = 0; }
     return a;
   };
+  const raster = (L, strokeMm) => {
+    g.clearRect(0, 0, W, H); g.fillStyle = "#000"; g.strokeStyle = "#000";
+    drawLine(g, L, L.M, q, ox + L.x * q, oy - L.y * q, strokeMm);
+    return readAlpha();
+  };
+  let baseMask = null;
+  if (BP.on) {
+    if (BP.shape === "contour") {
+      for (const L of layers) {
+        const m = raster(L, L.grow + (L.rim || 0) + (L.insert ? L.clearance : 0) + BP.margin);
+        baseMask = baseMask ? mUnionInto(baseMask, m) : m;
+      }
+    } else if (BP.shape === "rect") {
+      g.clearRect(0, 0, W, H); g.fillStyle = "#000"; g.beginPath();
+      const px = ox + bgeo.cx * q, py = oy - bgeo.cy * q, A = bgeo.a * q, B = bgeo.b * q;
+      {
+        const r = (bgeo.r || 0) * q, l = px - A, t = py - B, rr = px + A, bb = py + B;
+        g.moveTo(l + r, t); g.lineTo(rr - r, t); g.arcTo(rr, t, rr, t + r, r); g.lineTo(rr, bb - r); g.arcTo(rr, bb, rr - r, bb, r);
+        g.lineTo(l + r, bb); g.arcTo(l, bb, l, bb - r, r); g.lineTo(l, t + r); g.arcTo(l, t, l + r, t, r); g.closePath();
+      }
+      g.fill();
+      baseMask = readAlpha();
+    }
+  }
   for (const L of layers) {
     L.F = raster(L, L.grow);
     if (L.rim > 0) L.D = raster(L, L.grow + L.rim);
     if (L.insert) L.Pk = raster(L, L.grow + L.clearance);
+  }
+  if (BP.on && BP.shape === "oval") {
+    // kleinste Ellipse (Seitenverhältnis des Inhalts), die alle Schriftpixel umschließt, plus Rand
+    const hw = bgeo.a - BP.margin, hh = bgeo.b - BP.margin;   // vorläufig: Rahmen × √2
+    const rx = hw / Math.SQRT2 * q, ry = hh / Math.SQRT2 * q, pcx = ox + bgeo.cx * q, pcy = oy - bgeo.cy * q;
+    let smax = 0;
+    for (const L of layers) for (const m of [L.F, L.D, L.Pk]) {
+      if (!m) continue;
+      for (let j = 0; j < H; j++) {
+        const dy = (j + 0.5 - pcy) / ry, row = j * W;
+        for (let i = 0; i < W; i++) if (m[row + i] > 127) { const dx = (i + 0.5 - pcx) / rx, v2 = dx * dx + dy * dy; if (v2 > smax) smax = v2; }
+      }
+    }
+    const sc = Math.sqrt(smax) || 1;
+    g.clearRect(0, 0, W, H); g.fillStyle = "#000"; g.beginPath();
+    g.ellipse(pcx, pcy, rx * sc + BP.margin * q, ry * sc + BP.margin * q, 0, 0, Math.PI * 2);
+    g.fill();
+    baseMask = readAlpha();
   }
 
   // Materialfläche je Ebene: eigene Schrift + Ränder der Ebenen davor
@@ -480,11 +538,23 @@ async function generate(P) {
   }
   for (const L of solid) flush(L, levels.at(-1));
 
+  // Basisplatte: alles um ihre Dicke anheben, Platte darunter
+  let baseMesh = null;
+  if (BP.on) {
+    for (const L of solid) for (const m of runs.get(L).pieces) for (let i = 2; i < m.pos.length; i += 3) m.pos[i] += BT;
+    let shapes = maskToShapes(baseMask, W, H, q, ox, oy);
+    // Kontur: Löcher (z. B. im „O“) schließen, Inseln darin weglassen
+    if (BP.shape === "contour") shapes = shapes.filter(s => !shapes.some(o => o !== s && pointInPoly(s.outer[0], s.outer[1], o.outer))).map(s => ({ outer: s.outer, holes: [] }));
+    baseMesh = extrude(shapes, 0, BT);
+  }
   const parts = [];
   for (const L of solid) {
-    const mesh = mergeMeshes(runs.get(L).pieces);
+    let pieces = runs.get(L).pieces;
+    if (baseMesh && BP.same && L === layers[0]) pieces = [baseMesh, ...pieces];
+    const mesh = mergeMeshes(pieces);
     if (mesh) parts.push({ name: `Ebene ${L.k}`, k: L.k, filament: L.filament, color: L.color, mesh, layer: L });
   }
+  if (baseMesh && !BP.same) parts.push({ name: "Basisplatte", k: 99, filament: BP.filament, color: BP.color, mesh: baseMesh, base: true });
   if (!parts.length) throw new Error("Aus dem Text ist keine druckbare Fläche entstanden.");
 
   // Einlegeteile: in der Vorschau eingesetzt, in der 3MF flach unter dem Schild
@@ -496,20 +566,21 @@ async function generate(P) {
     for (let j = i - 1; j >= 0; j--) if (!layers[j].insert) { prev = layers[j]; break; }
     const base = L.mode === "stacked" ? prev.T : botOver(L, prev.T);
     const shapes = maskToShapes(L.F, W, H, q, ox, oy);
-    const mesh = extrude(shapes, base, L.T);
+    const mesh = extrude(shapes, base + BT, L.T + BT);
     if (!mesh) continue;
     let yMax = -1e9; for (const s of shapes) yMax = Math.max(yMax, bbox(s.outer)[3]);
     let yMin = 1e9; for (const s of shapes) yMin = Math.min(yMin, bbox(s.outer)[1]);
     const dy = yNext - 10 - yMax;
     yNext = yMin + dy;
     L.base = base;
-    parts.push({ name: `Ebene ${L.k} (Einlegeteil)`, k: L.k, filament: L.filament, color: L.color, mesh, layer: L, insert: true, exportOffset: [0, dy, -base] });
+    parts.push({ name: `Ebene ${L.k} (Einlegeteil)`, k: L.k, filament: L.filament, color: L.color, mesh, layer: L, insert: true, exportOffset: [0, dy, -(base + BT)] });
   }
   parts.sort((a, b) => a.k - b.k);
 
   // für die SVG: sichtbare Fläche je Ebene
-  const svgMasks = layers.map(L => ({ L, mask: L.insert ? L.F : L.E }));
-  return { parts, layers, q, reduced: q < P.q - 0.01, svg: { svgMasks, W, H, q, ox, oy } };
+  const svgMasks = layers.map(L => ({ name: `Ebene_${L.k}`, color: L.color, mask: L.insert ? L.F : L.E }));
+  if (baseMask) svgMasks.unshift({ name: "Basisplatte", color: BP.same ? layers[0].color : BP.color, mask: baseMask, solid: BP.shape === "contour" });
+  return { parts, layers, q, reduced: q < P.q - 0.01, baseT: BT, base: BP, svg: { svgMasks, W, H, q, ox, oy } };
 }
 
 /* ------------------------------------------------------------ 3D-Vorschau */
@@ -600,7 +671,7 @@ async function download3mf() {
     const anyInsert = current.parts.some(p => p.insert);
     const body = {
       title: baseName(), separate: (anyInsert || !$("#tAssembly").checked) && !floating(), thumbnail: thumbnail(),
-      parts: current.parts.map(p => ({ name: p.name, filament: p.filament, color: p.color, verts: b64(shifted(p)), faces: b64(p.mesh.idx), layers: p.mesh.layers || null })),
+      parts: current.parts.map(p => ({ name: p.name, filament: p.filament, color: p.color, verts: b64(shifted(p)), faces: b64(p.mesh.idx), layers: p.mesh.layers || null, own_object: !!p.insert })),
     };
     const r = await fetch("api/schriftzug", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(typeof j.detail === "string" ? j.detail : "Die 3MF konnte nicht erzeugt werden."); }
@@ -615,13 +686,17 @@ async function download3mf() {
 function downloadSvg() {
   if (!current) return;
   const S = current.svg;
-  const groups = S.svgMasks.map(({ L, mask }) => ({ L, shapes: maskToShapes(mask, S.W, S.H, S.q, S.ox, S.oy) }));
+  const groups = S.svgMasks.map(m => {
+    let shapes = maskToShapes(m.mask, S.W, S.H, S.q, S.ox, S.oy);
+    if (m.solid) shapes = shapes.filter(s => !shapes.some(o => o !== s && pointInPoly(s.outer[0], s.outer[1], o.outer))).map(s => ({ outer: s.outer, holes: [] }));
+    return { ...m, shapes };
+  });
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const gr of groups) for (const s of gr.shapes) { const b = bbox(s.outer); x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[2]); y1 = Math.max(y1, b[3]); }
   const W = x1 - x0, H = y1 - y0, f = (v) => v.toFixed(3);
   const ring = (p) => { let d = ""; for (let i = 0; i < p.length; i += 2) d += (i ? "L" : "M") + f(p[i] - x0) + " " + f(y1 - p[i + 1]); return d + "Z"; };
-  const body = groups.map(({ L, shapes }) =>
-    `<g id="Ebene_${L.k}" fill="${L.color}" fill-rule="evenodd" stroke="none">\n` +
+  const body = groups.map(({ name, color, shapes }) =>
+    `<g id="${name}" fill="${color}" fill-rule="evenodd" stroke="none">\n` +
     shapes.map(s => `<path d="${ring(s.outer)}${s.holes.map(ring).join("")}"/>`).join("\n") + "\n</g>").join("\n");
   const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${f(W)}mm" height="${f(H)}mm" viewBox="0 0 ${f(W)} ${f(H)}">\n${body}\n</svg>\n`;
   saveBlob(new Blob([svg], { type: "image/svg+xml" }), baseName() + ".svg");
@@ -633,6 +708,8 @@ function howto(res) {
   const inserts = res.parts.filter(p => p.insert);
   steps.push("Öffne die 3MF-Datei in Bambu Studio, Orca Slicer oder PrusaSlicer. Jede Ebene ist ihrem Filament-Platz schon zugeordnet; übernimmt dein Slicer das nicht, weise sie in der Objektliste zu.");
   const lines = [];
+  const bed = res.baseT ? "die Basisplatte" : "aufs Druckbett";
+  if (res.baseT) steps.push(`Alle Ebenen stehen auf einer ${de(res.baseT)} mm dicken Basisplatte` + (res.base.same ? " in der Farbe von Ebene 1." : "."));
   for (const L of res.layers.slice(1)) {
     const name = `Ebene ${L.k}`;
     if (L.insert) {
@@ -642,9 +719,9 @@ function howto(res) {
         : `, Aussparung ${de(L.embed)} mm tief, Spiel ${de(L.clearance, 2)} mm. Klemmt es, das Spiel erhöhen.`));
       continue;
     }
-    const where = L.mode === "stacked" ? "liegt auf den Ebenen dahinter auf" : L.mode === "through" ? "reicht vor den Ebenen dahinter bis aufs Druckbett" : `sitzt ${de(L.embed)} mm tief in den Ebenen dahinter`;
+    const where = L.mode === "stacked" ? "liegt auf den Ebenen dahinter auf" : L.mode === "through" ? `reicht vor den Ebenen dahinter bis auf ${bed.replace("aufs ", "das ")}` : `sitzt ${de(L.embed)} mm tief in den Ebenen dahinter`;
     let s = `${name} ${where}`;
-    if (L.freeBot !== undefined) s += L.freeBot <= 1e-3 ? "; wo nichts dahinter ist, reicht sie bis aufs Druckbett." : `; wo nichts dahinter ist, beginnt sie erst in ${de(L.freeBot)} mm Höhe und braucht Stützen.`;
+    if (L.freeBot !== undefined) s += L.freeBot <= 1e-3 ? `; wo nichts dahinter ist, reicht sie bis ${res.baseT ? "auf die Basisplatte" : "aufs Druckbett"}.` : `; wo nichts dahinter ist, beginnt sie erst in ${de(L.freeBot + res.baseT)} mm Höhe und braucht Stützen.`;
     else s += ".";
     lines.push(s);
   }
@@ -704,6 +781,12 @@ function hints() {
     $(`#t${k}ToBedRow`).hidden = ins;
     $(`#t${k}DepthRow`).hidden = ins || $(`#t${k}ToBed`).checked;
   }
+  const bOn = $("#tBaseOn").checked;
+  $("#tBaseRow").hidden = !bOn;
+  const shape = (document.querySelector("input[name=tBaseShape]:checked") || { value: "rect" }).value;
+  $("#tBaseRadiusL").hidden = shape !== "rect";
+  const same = $("#tBaseSame").checked;
+  $("#tBaseColorL").hidden = same; $("#tBaseNameL").hidden = same;
   const fl = floating();
   const anyInsert = current ? current.parts.some(p => p.insert) : false;
   $("#tAssembly").disabled = fl;
