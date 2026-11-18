@@ -328,6 +328,19 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
             </div>
             <label class="check"><input type="checkbox" id="tBaseSame"><span>In Farbe und Filament von Ebene 1 drucken</span></label>
             <p class="hint">Alle Ebenen stehen auf der Platte. Wo eine Ebene sonst bis aufs Druckbett reichen würde, reicht sie jetzt bis auf die Platte.</p>
+            <label class="check"><input type="checkbox" id="tStandOn"><span>Ständer zum Aufrechtstellen: Steckzunge unten an der Platte und ein Ständer mit schrägem Schlitz</span></label>
+            <div id="tStandRow" hidden>
+              <div class="fields">
+                <label class="f">Art
+                  <select id="tStandKind"><option value="long">Durchgehender Sockel</option><option value="two">Zwei kurze Füße</option></select>
+                </label>
+                <label class="f">Neigung nach hinten (°)<input type="number" id="tStandAngle" value="10" min="0" max="30" step="1"></label>
+                <label class="f">Einstecktiefe (mm)<input type="number" id="tStandDepth" value="8" min="3" max="30" step="0.5"></label>
+                <label class="f">Spiel je Seite (mm)<input type="number" id="tStandClear" value="0.2" min="0" max="1" step="0.05"></label>
+                <label class="f">Tiefe des Ständers (mm)<input type="number" id="tStandFoot" value="35" min="15" max="120" step="1"></label>
+              </div>
+              <p class="hint">Das Schild wird liegend gedruckt, der Ständer separat; beides liegt flach in der 3MF. Für große oder hohe Schilder den Ständer tiefer machen, damit nichts kippt.</p>
+            </div>
           </div>
         </li>
 

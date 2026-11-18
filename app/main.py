@@ -303,7 +303,7 @@ class TextPart(BaseModel):
 class TextModel(BaseModel):
     title: str = Field("schriftzug", max_length=60)
     separate: bool = True                     # getrennte Objekte statt ein Objekt mit Teilen
-    parts: List[TextPart] = Field(min_length=1, max_length=5)   # bis zu 4 Ebenen + Basisplatte
+    parts: List[TextPart] = Field(min_length=1, max_length=6)   # bis zu 4 Ebenen + Basisplatte + Ständer
     thumbnail: Optional[str] = Field(None, max_length=3_000_000)  # data:image/png;base64,...
 
 
@@ -352,7 +352,14 @@ def _union_layers(v, f, layers):
 @app.post("/api/schriftzug")
 def schriftzug(model: TextModel):
     meshes = [_union_layers(*_decode_mesh(p), p.layers) for p in model.parts]
-    parts = [Part(name=p.name, slot=i + 1, verts=v, faces=f)
+    # Teile mit gleichem Filament (Name + Farbe) teilen sich einen Filament-Platz
+    slots, slot_of = [], []
+    for p in model.parts:
+        key = ((p.filament.strip() or p.name), p.color.upper())
+        if key not in slots:
+            slots.append(key)
+        slot_of.append(slots.index(key) + 1)
+    parts = [Part(name=p.name, slot=slot_of[i], verts=v, faces=f)
              for i, (p, (v, f)) in enumerate(zip(model.parts, meshes))]
     title = model.title.strip() or "schriftzug"
     # Slicer setzen jedes Objekt beim Laden auf die Druckplatte. Beginnt ein Teil
@@ -363,7 +370,6 @@ def schriftzug(model: TextModel):
     separate = model.separate and all(p.verts[:, 2].min() <= floor + 1e-3 for p in rest)
     objects = [Obj(name=p.name, parts=[p]) for p in rest] if separate else ([Obj(name=title, parts=rest)] if rest else [])
     objects += [Obj(name=p.name, parts=[p]) for p in own]
-    slots = [((p.filament.strip() or p.name), p.color.upper()) for p in model.parts]
 
     thumb = None
     if model.thumbnail and model.thumbnail.startswith("data:image/png;base64,"):
