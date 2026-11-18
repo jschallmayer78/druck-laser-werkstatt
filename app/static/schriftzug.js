@@ -271,7 +271,8 @@ function params() {
           thick: Math.max(0.4, num("tBgThick", 5)), spacing: num("tBgSpacing", 0), grow: Math.max(0, num("tBgGrow", 0)),
           color: $("#tBgColor").value.toUpperCase(), filament: $("#tBgName").value.trim() || "Hintergrund" },
     fg: { text: $("#tFgText").value, font: fontMap.get($("#tFgFont").value), height: num("tFgHeight", 30),
-          over: Math.max(0, num("tFgOver", 2)), embed: Math.max(0, num("tFgEmbed", 2)), x: num("tFgX", 0), y: num("tFgY", 0), spacing: num("tFgSpacing", 0),
+          over: Math.max(0, num("tFgOver", 2)), embed: Math.max(0, num("tFgEmbed", 2)),
+          toBed: $("#tFgToBed").checked, depth: Math.max(0.4, num("tFgDepth", 4)), x: num("tFgX", 0), y: num("tFgY", 0), spacing: num("tFgSpacing", 0),
           grow: Math.max(0, num("tFgGrow", 0)), rim: Math.max(0, num("tFgRim", 0)),
           color: $("#tFgColor").value.toUpperCase(), filament: $("#tFgName").value.trim() || "Vordergrund" },
     mode: document.querySelector("input[name=tMode]:checked").value,
@@ -298,19 +299,29 @@ async function generate(P) {
   const W = Math.ceil((x1 - x0) * q), H = Math.ceil((y1 - y0) * q);
   const ox = -x0 * q, oy = y1 * q;
   const mk = () => { const c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d", { willReadFrequently: true }); g.fillStyle = "#000"; g.strokeStyle = "#000"; return g; };
-  const gb = mk(), gf = mk(), gs = mk();   // gb: Hintergrund mit Aussparung, gs: voll (trägt die kleine Zeile)
+  // Masken:
+  //   g0    große Buchstaben
+  //   gf    kleine Zeile
+  //   gfree kleine Zeile, soweit sie NICHT vor einem großen Buchstaben liegt
+  //   gs    Hintergrund unterhalb der Vertiefung: große Buchstaben + Rand, ohne gfree
+  //   gb    Hintergrund oberhalb (mit Aussparung): große Buchstaben + Rand, ohne gf
+  // Wo die kleine Zeile über die großen Buchstaben hinausragt, reicht sie bis
+  // aufs Druckbett; nur vor einem Buchstaben sitzt sie auf Hintergrundmaterial.
+  const g0 = mk(), gf = mk(), gfree = mk(), gs = mk(), gb = mk();
   const bx = ox, by = oy, fx = ox + P.fg.x * q, fy = oy - P.fg.y * q;
+  const cutOut = (g, src) => { g.globalCompositeOperation = "destination-out"; g.drawImage(src.canvas, 0, 0); g.globalCompositeOperation = "source-over"; };
 
-  if (MF) drawLine(gf, P.fg, MF, q, fx, fy, P.fg.grow);
+  if (MB) drawLine(g0, P.bg, MB, q, bx, by, P.bg.grow);
+  if (MF) {
+    drawLine(gf, P.fg, MF, q, fx, fy, P.fg.grow);
+    drawLine(gfree, P.fg, MF, q, fx, fy, P.fg.grow);
+    cutOut(gfree, g0);
+  }
   for (const g of [gb, gs]) {
     if (MB) drawLine(g, P.bg, MB, q, bx, by, P.bg.grow);
-    if (MF) drawLine(g, P.fg, MF, q, fx, fy, P.fg.grow + P.fg.rim);   // Rand + Auflagefläche
+    if (MF && P.fg.rim > 0) drawLine(g, P.fg, MF, q, fx, fy, P.fg.grow + P.fg.rim);   // Rand
   }
-  if (MF) {   // Aussparung, in der die kleine Zeile sitzt
-    gb.globalCompositeOperation = "destination-out";
-    drawLine(gb, P.fg, MF, q, fx, fy, P.fg.grow);
-    gb.globalCompositeOperation = "source-over";
-  }
+  if (MF) { cutOut(gb, gf); cutOut(gs, gfree); }
   const alphaOf = (g) => {
     const d = g.getImageData(0, 0, W, H).data, a = new Uint8Array(W * H);
     for (let i = 0, j = 3; i < a.length; i++, j += 4) a[i] = d[j];
@@ -319,25 +330,47 @@ async function generate(P) {
     return a;
   };
   const split = MF ? T - embed : T;                 // Höhe, ab der die Vertiefung beginnt
-  const fgZ0 = split;
   const fgZ1 = T + (embed === 0 ? Math.max(0.2, P.fg.over) : P.fg.over);
   const parts = [];
   {
     // unten voll (trägt die kleine Zeile), oben mit Aussparung
     const meshes = [];
     const cut = MF && split < T - 1e-6 ? maskToShapes(alphaOf(gb), W, H, q, ox, oy) : null;
-    const full = split > 1e-6 ? maskToShapes(alphaOf(MF ? gs : gb), W, H, q, ox, oy) : null;
+    const full = split > 1e-6 ? maskToShapes(alphaOf(MF ? gs : gb), W, H, q, ox, oy) : null;   // ohne kleine Zeile: gb == gs
     if (full && full.length) meshes.push(extrude(full, 0, split));
     if (cut && cut.length) meshes.push(extrude(cut, split, T));
     const mesh = mergeMeshes(meshes.filter(Boolean));
     if (mesh) parts.push({ name: "Hintergrund", filament: P.bg.filament, color: P.bg.color, shapes: (cut && cut.length) ? cut : full, mesh });
   }
+  // Unterkante der kleinen Zeile außerhalb der großen Buchstaben:
+  // Druckbett oder eigene Tiefe (gemessen von ihrer Oberseite)
+  const fb = P.fg.toBed ? 0 : Math.min(fgZ1 - 0.2, Math.max(0, fgZ1 - P.fg.depth));
+  let freeArea = false;
   if (MF) {
-    const shapes = maskToShapes(alphaOf(gf), W, H, q, ox, oy), mesh = extrude(shapes, fgZ0, fgZ1);
+    // Lagen übereinander, der Server vereinigt sie zu einem Körper:
+    //   vor den Buchstaben: Boden der Vertiefung (split) bis Oberkante
+    //   außerhalb:          fb bis Oberkante
+    const meshes = [];
+    const shapes = maskToShapes(alphaOf(gf), W, H, q, ox, oy);
+    const free = maskToShapes(alphaOf(gfree), W, H, q, ox, oy);
+    freeArea = free.length > 0;
+    if (fb < split - 1e-6) {
+      if (free.length) meshes.push(extrude(free, fb, split));
+      if (shapes.length) meshes.push(extrude(shapes, split, fgZ1));
+    } else if (fb > split + 1e-6) {
+      const gover = mk();
+      gover.drawImage(gf.canvas, 0, 0); cutOut(gover, gfree);
+      const over = maskToShapes(alphaOf(gover), W, H, q, ox, oy);
+      if (over.length) meshes.push(extrude(over, split, fb));
+      if (shapes.length) meshes.push(extrude(shapes, fb, fgZ1));
+    } else if (shapes.length) {
+      meshes.push(extrude(shapes, split, fgZ1));
+    }
+    const mesh = mergeMeshes(meshes.filter(Boolean));
     if (mesh) parts.push({ name: "Vordergrund", filament: P.fg.filament, color: P.fg.color, shapes, mesh });
   }
   if (!parts.length) throw new Error("Aus dem Text ist keine druckbare Fläche entstanden.");
-  return { parts, q, reduced: q < P.q - 0.01, embed };
+  return { parts, q, reduced: q < P.q - 0.01, embed, fb, freeArea };
 }
 
 /* ------------------------------------------------------------ 3D-Vorschau */
@@ -461,16 +494,22 @@ async function run() {
     $("#tStats").innerHTML = [["Größe", `${de(size.x)} × ${de(size.y)} × ${de(size.z)} mm`], ["Dreiecke", tris.toLocaleString("de-DE")]]
       .map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
     const e = res.embed;
+    const fgPart = res.parts.find(p => p.name === "Vordergrund");
+    const fgOnBed = fgPart && res.freeArea && res.fb <= 1e-3;
     const steps = [
       "Öffne die 3MF-Datei in Bambu Studio, Orca Slicer oder PrusaSlicer. Die Teile sind ihren Filament-Plätzen schon zugeordnet; übernimmt dein Slicer das nicht, weise sie in der Objektliste zu.",
       e >= P.bg.thick - 1e-6 ? "Beide Teile stehen auf dem Druckbett, der Hintergrund ist unter der kleinen Zeile ausgespart."
+        : fgOnBed ? (e === 0 ? "Die kleine Zeile liegt auf den großen Buchstaben auf." : `Vor den großen Buchstaben sitzt die kleine Zeile ${de(e)} mm tief.`)
+            + " Wo sie über die Buchstaben hinausragt, reicht sie bis aufs Druckbett."
         : e === 0 ? "Die kleine Zeile liegt oben auf: Farbwechsel gibt es nur in den obersten Schichten, das spart Spülmaterial."
         : `Die kleine Zeile sitzt ${de(e)} mm tief im Hintergrund. Farbwechsel beginnen erst ab ${de(P.bg.thick - e)} mm Höhe.`,
-      "Schichthöhe 0,2 mm, 3 Wände, keine Stützen. Liegend drucken.",
+      res.freeArea && res.fb > 1e-3
+        ? `Außerhalb der großen Buchstaben beginnt die kleine Zeile erst in ${de(res.fb)} mm Höhe und hängt in der Luft: im Slicer Stützen aktivieren (z. B. „Baum“, nur auf Druckplatte). Schichthöhe 0,2 mm, 3 Wände.`
+        : "Schichthöhe 0,2 mm, 3 Wände, keine Stützen. Liegend drucken.",
     ];
-    if (P.fg.rim === 0 && P.fg.text.trim()) steps.push("Ohne Rand hängt die kleine Zeile nicht mit den großen Buchstaben zusammen. Für ein Teil aus einem Guss den Rand auf 2 mm oder mehr stellen.");
     $("#tHowto").innerHTML = steps.map(s => `<li>${esc(s)}</li>`).join("");
     $("#tResult").hidden = false;
+    modeHint();
     status.textContent = `Vorschau aktualisiert in ${Math.round(performance.now() - t0)} ms` + (res.reduced ? " · Auflösung wegen der Größe reduziert" : "");
   } catch (e) {
     console.error(e);
@@ -507,6 +546,7 @@ async function activate() {
   $$("input[name=tMode]").forEach(el => el.addEventListener("change", modeHint));
   $("#tBgThick").addEventListener("input", modeHint);
   $("#tFgText").addEventListener("input", modeHint);
+  $("#tFgToBed").addEventListener("change", modeHint);
   modeHint();
   $("#tForm").addEventListener("submit", (e) => { e.preventDefault(); download3mf(); });
   $("#tSvg").addEventListener("click", downloadSvg);
@@ -518,21 +558,22 @@ async function activate() {
 }
 // Beginnt ein Teil über dem Druckbett, muss alles ein Objekt sein: Slicer setzen
 // jedes Objekt beim Laden auf die Druckplatte und würden die kleine Zeile absenken.
+function minZ(mesh) { let z = Infinity; for (let i = 2; i < mesh.pos.length; i += 3) if (mesh.pos[i] < z) z = mesh.pos[i]; return z; }
 function floating() {
-  const m = document.querySelector("input[name=tMode]:checked").value;
-  return m !== "through" && $("#tFgText").value.trim() !== "";
+  return !!current && current.parts.some(p => minZ(p.mesh) > 1e-3);
 }
 function modeHint() {
   const m = document.querySelector("input[name=tMode]:checked").value;
   const fl = floating();
   $("#tAssembly").disabled = fl;
+  $("#tFgDepthRow").hidden = $("#tFgToBed").checked;
   $("#tAssemblyHint").hidden = !fl;
   $("#tEmbedRow").hidden = m !== "embedded";
   $("#tFgEmbed").max = String(num("tBgThick", 5));
   $("#tModeHint").textContent = {
-    stacked: "Spart Farbwechsel: die zweite Farbe kommt erst in den obersten Schichten. Der Rand sollte größer als 0 sein, damit nichts in der Luft hängt.",
-    embedded: "Die Tiefe zählt von der Oberseite des Hintergrunds nach unten, höchstens bis zu seiner Dicke. Die kleine Zeile ragt zusätzlich um den Überstand heraus.",
-    through: "Die kleine Zeile reicht durch den ganzen Hintergrund bis aufs Druckbett. Am stabilsten, aber Farbwechsel ab der ersten Schicht.",
+    stacked: "Vor den großen Buchstaben liegt die kleine Zeile oben auf.",
+    embedded: "Die Einbettungstiefe zählt von der Oberseite der großen Buchstaben nach unten, höchstens bis zu ihrer Dicke.",
+    through: "Vor den großen Buchstaben reicht die kleine Zeile durch den ganzen Hintergrund bis aufs Druckbett.",
   }[m];
 }
 

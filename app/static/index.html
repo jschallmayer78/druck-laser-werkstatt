@@ -332,7 +332,7 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
             <label class="f">Farbe<input type="color" id="tFgColor" value="#C4392D"></label>
             <label class="f">Filament<input type="text" id="tFgName" value="Rot" maxlength="30"></label>
           </div>
-          <p class="hint">Der Rand umgibt die kleine Zeile in der Hintergrundfarbe und verbindet sie mit den großen Buchstaben. Dünne Schreibschriften mit etwas Verstärkung (0,3–0,6 mm) druckfester machen.</p>
+          <p class="hint">Der Rand umgibt die kleine Zeile in der Hintergrundfarbe (0 = kein Rand). Dünne Schreibschriften mit etwas Verstärkung (0,3–0,6 mm) druckfester machen.</p>
         </li>
 
         <li class="step done">
@@ -347,8 +347,15 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
             <label class="f">Einbettungstiefe (mm)<input type="number" id="tFgEmbed" value="2" min="0.2" max="50" step="0.2"></label>
           </div>
           <p class="hint" id="tModeHint"></p>
+          <label class="check"><input type="checkbox" id="tFgToBed" checked><span>Kleine Zeile außerhalb der großen Buchstaben bis aufs Druckbett führen</span></label>
+          <div id="tFgDepthRow" hidden>
+            <div class="fields">
+              <label class="f">Tiefe der kleinen Zeile (mm)<input type="number" id="tFgDepth" value="4" min="0.4" max="50" step="0.2"></label>
+            </div>
+            <p class="hint">Gemessen von der Oberseite der kleinen Zeile nach unten. Außerhalb der großen Buchstaben hängt sie dann in der Luft und braucht im Slicer Stützen.</p>
+          </div>
           <label class="check"><input type="checkbox" id="tAssembly"><span>Als ein Objekt mit zwei Teilen speichern statt als zwei getrennte Objekte</span></label>
-          <p class="hint" id="tAssemblyHint" hidden>Bei „Aufgesetzt“ und „Eingelassen“ wird immer ein Objekt mit zwei Teilen gespeichert. Als eigenes Objekt würde der Slicer die kleine Zeile auf die Druckplatte absenken.</p>
+          <p class="hint" id="tAssemblyHint" hidden>Hier wird immer ein Objekt mit zwei Teilen gespeichert: Die kleine Zeile beginnt über dem Druckbett, als eigenes Objekt würde der Slicer sie auf die Platte absenken.</p>
           <details>
             <summary>Feineinstellungen</summary>
             <div class="fields">
