@@ -231,6 +231,12 @@ async function activate() {
   if (!window.Werkstatt) { setTimeout(activate, 100); return; }
   started = true;
   W().fillFontSelect($("#aFont"), "Archivo Black|400");
+  const fp = W().enhanceFontSelect($("#aFont"), () => {
+    const w = $("#aWord1").value + " / " + $("#aWord2").value;
+    return $("#aUpper").checked ? w.toLocaleUpperCase("de-DE") : w;
+  });
+  ["aWord1", "aWord2", "aUpper"].forEach(id => $("#" + id).addEventListener("input", fp.refresh));
+  $("#aUpper").addEventListener("change", fp.refresh);
   W().FONTS.forEach(W().linkFont);
   try {
     if (!window.THREE) await W().loadScript(W().THREE_URL);
