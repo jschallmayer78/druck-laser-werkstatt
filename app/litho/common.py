@@ -50,7 +50,12 @@ def srgb_to_lab(rgb):
 def prepare_image(img, size, autocontrast=False, gamma=1.0, saturation=1.0):
     """Bild auf size=(w,h) zuschneiden. Liefert Helligkeit (0..1) und RGB (0..1),
     Zeile 0 = oben."""
-    img = ImageOps.exif_transpose(img).convert("RGB")
+    img = ImageOps.exif_transpose(img)
+    if img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info):
+        # durchsichtige Bereiche (z. B. aus SVG-Grafiken) auf Weiß legen statt auf Schwarz
+        rgba = img.convert("RGBA")
+        img = Image.alpha_composite(Image.new("RGBA", rgba.size, (255, 255, 255, 255)), rgba)
+    img = img.convert("RGB")
     if autocontrast:
         img = ImageOps.autocontrast(img, cutoff=1)
     img = ImageOps.fit(img, size, method=Image.LANCZOS)

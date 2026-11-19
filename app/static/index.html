@@ -214,9 +214,9 @@ select.fp-native { display: none !important; }
         <li class="step" id="s1">
           <h2>Bilder hochladen</h2>
           <label class="drop" id="drop">
-            <input type="file" id="files" accept="image/*" multiple>
+            <input type="file" id="files" accept="image/*,.svg" multiple>
             <strong>Bilder auswählen oder hierher ziehen</strong>
-            <span class="hint">JPG, PNG oder WebP, bis zu 6 Bilder</span>
+            <span class="hint">JPG, PNG, WebP oder SVG, bis zu 6 Bilder</span>
           </label>
           <ul class="thumbs" id="thumbs"></ul>
           <p class="hint" id="orderHint" hidden>Beim Lampenschirm laufen die Bilder in dieser Reihenfolge einmal rundherum.</p>
@@ -506,9 +506,9 @@ select.fp-native { display: none !important; }
         <li class="step" id="l1">
           <h2>Bild hochladen</h2>
           <label class="drop" id="lDrop">
-            <input type="file" id="lFile" accept="image/*">
+            <input type="file" id="lFile" accept="image/*,.svg">
             <strong>Bild auswählen oder hierher ziehen</strong>
-            <span class="hint">JPG, PNG oder WebP, ein Bild pro Gravur</span>
+            <span class="hint">JPG, PNG, WebP oder SVG, ein Bild pro Gravur</span>
           </label>
           <ul class="thumbs" id="lThumb"></ul>
         </li>
@@ -603,9 +603,48 @@ const val = (name) => document.querySelector(`input[name=${name}]:checked`).valu
 let files = [];
 let palette = DEFAULTS.slice(0, 5).map(([name, color]) => ({ name, color }));
 
+/* SVG-Grafiken: im Browser in ein hochauflösendes PNG umwandeln (Transparenz bleibt erhalten).
+   Gerendert wird als Bild, eingebettete Skripte laufen dabei nicht. */
+const isSvg = (f) => f && (f.type === "image/svg+xml" || /\.svg$/i.test(f.name));
+async function svgToPng(file, longSide = 3000) {
+  const txt = await file.text();
+  const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
+  const svg = doc.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== "svg" || doc.querySelector("parsererror")) throw new Error(`${file.name} ist keine gültige SVG-Datei.`);
+  let vb = (svg.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+  if (vb.length !== 4 || vb.some(x => !isFinite(x)) || vb[2] <= 0 || vb[3] <= 0) {
+    vb = [0, 0, parseFloat(svg.getAttribute("width")) || 100, parseFloat(svg.getAttribute("height")) || 100];
+    svg.setAttribute("viewBox", vb.join(" "));
+  }
+  const w = vb[2] >= vb[3] ? longSide : Math.round(longSide * vb[2] / vb[3]);
+  const h = vb[3] > vb[2] ? longSide : Math.round(longSide * vb[3] / vb[2]);
+  svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  if (!svg.getAttribute("xmlns")) svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" }));
+  try {
+    const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error(`${file.name} lässt sich nicht darstellen.`)); i.src = url; });
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    c.getContext("2d").drawImage(im, 0, 0, w, h);
+    const blob = await new Promise((res, rej) => { try { c.toBlob(b => b ? res(b) : rej(new Error(`${file.name} konnte nicht umgewandelt werden.`)), "image/png"); } catch (e) { rej(new Error(`${file.name} kann der Browser nicht auslesen.`)); } });
+    return new File([blob], file.name.replace(/\.svg$/i, "") + ".png", { type: "image/png" });
+  } finally { URL.revokeObjectURL(url); }
+}
+// Bilder übernehmen; SVGs werden vorher umgewandelt
+async function prepImages(list, errEl) {
+  const out = [];
+  for (const f of list) {
+    try {
+      if (isSvg(f)) out.push(await svgToPng(f));
+      else if (f.type.startsWith("image/")) out.push(f);
+    } catch (e) { errEl.textContent = e.message; errEl.hidden = false; }
+  }
+  return out;
+}
+
 /* Upload */
-function addFiles(list) {
-  files = files.concat([...list].filter(f => f.type.startsWith("image/"))).slice(0, 6);
+async function addFiles(list) {
+  const add = await prepImages([...list], $("#error"));
+  files = files.concat(add).slice(0, 6);
   renderThumbs();
 }
 function renderThumbs() {
@@ -800,8 +839,10 @@ if (location.hash === "#ambigramm") setMode("ambi");
 
 /* ------------------------------------------------------------ Lasergravur */
 let lFile = null;
-function lSet(f) {
-  if (!f || !f.type.startsWith("image/")) return;
+async function lSet(f) {
+  if (!f) return;
+  if (isSvg(f)) { f = (await prepImages([f], $("#lError")))[0]; if (!f) return; }
+  if (!f.type.startsWith("image/")) return;
   lFile = f;
   const url = URL.createObjectURL(f);
   $("#lThumb").innerHTML = `<li><img alt="${esc(f.name)}" src="${url}"><div class="ctl"><span></span><button type="button" aria-label="Entfernen">✕</button><span></span></div></li>`;
