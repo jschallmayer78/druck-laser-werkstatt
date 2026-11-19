@@ -3,13 +3,13 @@
 Webservice, der aus Fotos und Text druckfertige Vorlagen für 3D-Drucker und
 Laser erzeugt. Vier Werkzeuge, umschaltbar oben auf der Seite:
 
-- **Lithophane (3D-Druck):** Fotos als Lampenschirm (Zylinder, optional mit
+- **Lithophane (3D-Druck):** Fotos oder SVG-Grafiken als Lampenschirm (Zylinder, optional mit
   Boden und Deckel) oder flache Platte, einfarbig oder mehrfarbig.
 - **Schriftzug (3D-Druck):** bis zu vier Textebenen, große Buchstaben
   hinten und kleinere Zeilen davor, jede in eigener Farbe.
 - **Ambigramm (3D-Druck):** zwei Wörter in einem Objekt – von vorne liest
   man das eine, um 90° gedreht das andere.
-- **Lasergravur:** Fotos als Gravurvorlage für Schiefer, Holz, Leder oder
+- **Lasergravur:** Fotos oder SVG-Grafiken als Gravurvorlage für Schiefer, Holz, Leder oder
   eloxiertes Aluminium.
 
 3D-Druck-Ergebnisse kommen als **eine einzige 3MF-Datei**, in der jedes Teil
@@ -82,6 +82,14 @@ Die Geometrie entsteht im Browser (Schriften rendern, Konturen verfolgen, das
 Modell in Höhenbänder zerlegen, extrudieren); die 3D-Vorschau nutzt three.js
 vom CDN. Der Server vereinigt die Bänder jeder Ebene mit manifold3d zu einem
 geschlossenen Körper und packt alles in die 3MF.
+
+## SVG-Grafiken bei Lithophane und Lasergravur
+
+Beide Werkzeuge nehmen neben JPG, PNG und WebP auch SVG-Dateien an. Der
+Browser wandelt sie vor dem Hochladen in ein PNG mit 3000 Pixeln an der
+langen Seite um; Transparenz bleibt erhalten, eingebettete Skripte laufen
+nicht. Bei Lithophanes werden durchsichtige Bereiche weiß (dünn, hell im
+Gegenlicht), bei der Lasergravur bleiben sie ungraviert.
 
 ## Ambigramm
 
