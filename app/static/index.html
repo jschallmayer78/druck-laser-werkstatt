@@ -168,8 +168,26 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
 #aView { width: 100%; height: 440px; position: relative; z-index: 1; cursor: grab; }
 #aView canvas { display: block; border-radius: var(--radius-s); }
 .aviews { display: flex; gap: 8px; justify-content: center; margin-bottom: 10px; position: relative; z-index: 1; flex-wrap: wrap; }
-.aviews .btn2[aria-pressed="true"] { border-color: var(--amber); background: #FFF6E5; }
+.aviews .btn2[aria-pressed="true"] { border-color: var(--amber); background: rgba(232, 163, 61, .18); }
 .awarn { margin: 0 0 14px; padding-left: 1.2em; color: #8A4B08; }
+/* Schriftauswahl mit Vorschau */
+select.fp-native { display: none !important; }
+.fp { position: relative; margin-top: 4px; }
+.fp-btn { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 6px 34px 6px 10px; position: relative; min-height: 42px; }
+.fp-btn::after { content: ""; position: absolute; right: 12px; top: 50%; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-70%) rotate(45deg); opacity: .6; }
+.fp-btn:hover, .fp-btn[aria-expanded="true"] { border-color: var(--amber); }
+.fp-cur { font-size: 1.35rem; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.fp-name { font-size: .78rem; color: var(--muted, #667); white-space: nowrap; flex: none; }
+.fp-pop { position: absolute; z-index: 50; left: 0; right: 0; min-width: 300px; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-s); box-shadow: 0 12px 32px rgba(20, 30, 45, .18); padding: 8px; }
+.fp-search { width: 100%; margin: 0 0 6px !important; }
+.fp-list { max-height: 360px; overflow-y: auto; }
+.fp-group { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted, #667); padding: 8px 8px 4px; }
+.fp-item { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+.fp-item:hover, .fp-item.act { background: rgba(232, 163, 61, .18); }
+.fp-item.sel { box-shadow: inset 3px 0 0 var(--amber); }
+.fp-sample { font-size: 1.4rem; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 [hidden] { display: none !important; }
 </style>
 </head>

@@ -71,6 +71,82 @@ function fillFontSelect(sel, keep) {
     sel.appendChild(og);
   }
   if (prev && fontMap.has(prev)) sel.value = prev;
+  if (sel._fp) sel._fp.refresh();
+}
+
+/* Schriftauswahl mit Vorschau: ersetzt die Anzeige eines <select>, das <select>
+ * bleibt (versteckt) die Quelle für Wert und change-Ereignisse. sample() liefert
+ * den Vorschautext (z. B. den Text der Ebene). */
+const cssFam = (f) => String(f).replace(/['"\\<>&;]/g, "");   // Schriftname sicher in style="…"
+function enhanceFontSelect(sel, sample) {
+  if (sel._fp) return sel._fp;
+  const wrap = document.createElement("div"); wrap.className = "fp";
+  const btn = document.createElement("button"); btn.type = "button"; btn.className = "fp-btn";
+  btn.setAttribute("aria-haspopup", "listbox"); btn.setAttribute("aria-expanded", "false");
+  const pop = document.createElement("div"); pop.className = "fp-pop"; pop.hidden = true;
+  const search = document.createElement("input"); search.type = "search"; search.className = "fp-search"; search.placeholder = "Schrift suchen …";
+  const list = document.createElement("div"); list.className = "fp-list"; list.setAttribute("role", "listbox");
+  pop.append(search, list); wrap.append(btn, pop);
+  sel.classList.add("fp-native"); sel.tabIndex = -1; sel.setAttribute("aria-hidden", "true");
+  sel.insertAdjacentElement("afterend", wrap);
+  wrap.addEventListener("click", (e) => e.preventDefault());   // Klick nicht an das <label> weiterreichen
+  const fontOf = (key) => fontMap.get(key);
+  const sampleText = () => { const t = (sample && sample() || "").trim(); return (t || "Schriftprobe").slice(0, 28); };
+  let items = [], active = -1;
+  function refresh() {
+    const o = fontOf(sel.value);
+    const label = sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : "–";
+    btn.innerHTML = `<span class="fp-cur" style="font-family:'${o ? cssFam(o.f) : "inherit"}';font-weight:${o ? o.w : 400}">${esc(sampleText())}</span><span class="fp-name">${esc(label)}</span>`;
+  }
+  function build() {
+    const q = search.value.trim().toLowerCase(), txt = esc(sampleText());
+    let html = "";
+    items = [];
+    for (const og of sel.querySelectorAll("optgroup")) {
+      const opts = [...og.querySelectorAll("option")].filter(op => !q || op.textContent.toLowerCase().includes(q));
+      if (!opts.length) continue;
+      html += `<div class="fp-group">${esc(og.label)}</div>`;
+      for (const op of opts) {
+        const o = fontOf(op.value);
+        items.push(op.value);
+        html += `<div class="fp-item${op.value === sel.value ? " sel" : ""}" role="option" data-v="${esc(op.value)}" aria-selected="${op.value === sel.value}">`
+             + `<span class="fp-sample" style="font-family:'${cssFam(o.f)}';font-weight:${o.w}">${txt}</span>`
+             + `<span class="fp-name">${esc(op.textContent)}</span></div>`;
+      }
+    }
+    list.innerHTML = html || `<div class="fp-group">Keine Schrift gefunden</div>`;
+    active = items.indexOf(sel.value);
+    if (active < 0 && items.length) active = 0;   // nach dem Suchen: erster Treffer
+    mark();
+  }
+  function mark() {
+    list.querySelectorAll(".fp-item").forEach((el, i) => el.classList.toggle("act", i === active));
+    const el = list.querySelectorAll(".fp-item")[active];
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }
+  function choose(v) {
+    if (v && v !== sel.value) { sel.value = v; sel.dispatchEvent(new Event("input", { bubbles: true })); sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    close(); refresh(); btn.focus();
+  }
+  function open() {
+    document.querySelectorAll(".fp-pop").forEach(p => { if (p !== pop) { p.hidden = true; p.previousElementSibling.setAttribute("aria-expanded", "false"); } });
+    search.value = ""; build(); pop.hidden = false; btn.setAttribute("aria-expanded", "true"); search.focus();
+  }
+  function close() { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); }
+  btn.addEventListener("click", () => pop.hidden ? open() : close());
+  search.addEventListener("input", build);
+  list.addEventListener("click", (e) => { const it = e.target.closest(".fp-item"); if (it) choose(it.dataset.v); });
+  pop.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); close(); btn.focus(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); active = Math.min(items.length - 1, active + 1); mark(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); active = Math.max(0, active - 1); mark(); }
+    else if (e.key === "Enter") { e.preventDefault(); if (items[active]) choose(items[active]); }
+  });
+  document.addEventListener("mousedown", (e) => { if (!pop.hidden && !wrap.contains(e.target)) close(); });
+  sel.addEventListener("change", refresh);
+  sel._fp = { refresh, close };
+  refresh();
+  return sel._fp;
 }
 
 /* ------------------------------------------------------------ Text-Layout */
@@ -963,7 +1039,12 @@ async function activate() {
   started = true;
   const anchor = $("#tOut");
   for (let k = 1; k <= MAXL; k++) anchor.insertAdjacentHTML("beforebegin", layerCard(k));
-  for (const sel of allFontSelects()) fillFontSelect(sel, sel.dataset.def);
+  for (const sel of allFontSelects()) {
+    fillFontSelect(sel, sel.dataset.def);
+    const k = sel.id.slice(1, -4);                       // t2Font -> 2
+    enhanceFontSelect(sel, () => $(`#t${k}Text`).value);
+    $(`#t${k}Text`).addEventListener("input", () => sel._fp.refresh());
+  }
   FONTS.forEach(linkFont);
   try {
     if (!window.THREE) await loadScript(THREE_URL);
@@ -1002,13 +1083,14 @@ async function activate() {
 let uploadTarget = "1", svgTarget = "1";
 async function addFontFile(file) {
   try {
-    const fam = "Eigene – " + file.name.replace(/\.[^.]+$/, "");
+    const fam = "Eigene – " + file.name.replace(/\.[^.]+$/, "").replace(/['"\\<>&;]/g, "");
     const ff = new FontFace(fam, await file.arrayBuffer());
     await ff.load(); document.fonts.add(ff);
     const o = { f: fam, w: 400, g: "Eigene Schriften", custom: true };
     fontMap.set(fontKey(o), o);
     for (const sel of allFontSelects()) fillFontSelect(sel);
-    $(`#t${uploadTarget}Font`).value = fontKey(o);
+    const tsel = $(`#t${uploadTarget}Font`);
+    tsel.value = fontKey(o); tsel._fp && tsel._fp.refresh();
     schedule();
   } catch (e) { $("#tError").textContent = "Die Schriftdatei konnte nicht gelesen werden."; $("#tError").hidden = false; }
 }
@@ -1029,6 +1111,6 @@ async function addGoogleFont() {
 
 window.Schriftzug = { activate };
 // gemeinsame Werkzeuge für den Ambigramm-Reiter
-window.Werkstatt = { FONTS, fontMap, fontKey, linkFont, loadFont, fillFontSelect, maskToShapes, loadScript, THREE_URL, ORBIT_URL, de, esc };
+window.Werkstatt = { FONTS, fontMap, fontKey, linkFont, loadFont, fillFontSelect, enhanceFontSelect, maskToShapes, loadScript, THREE_URL, ORBIT_URL, de, esc };
 if (!$("#modeText").hidden) activate();
 })();
