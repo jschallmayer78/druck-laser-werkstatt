@@ -1,12 +1,14 @@
 # Druck & Laser Werkstatt
 
 Webservice, der aus Fotos und Text druckfertige Vorlagen für 3D-Drucker und
-Laser erzeugt. Drei Werkzeuge, umschaltbar oben auf der Seite:
+Laser erzeugt. Vier Werkzeuge, umschaltbar oben auf der Seite:
 
 - **Lithophane (3D-Druck):** Fotos als Lampenschirm (Zylinder, optional mit
   Boden und Deckel) oder flache Platte, einfarbig oder mehrfarbig.
 - **Schriftzug (3D-Druck):** bis zu vier Textebenen, große Buchstaben
   hinten und kleinere Zeilen davor, jede in eigener Farbe.
+- **Ambigramm (3D-Druck):** zwei Wörter in einem Objekt – von vorne liest
+  man das eine, um 90° gedreht das andere.
 - **Lasergravur:** Fotos als Gravurvorlage für Schiefer, Holz, Leder oder
   eloxiertes Aluminium.
 
@@ -80,6 +82,28 @@ Die Geometrie entsteht im Browser (Schriften rendern, Konturen verfolgen, das
 Modell in Höhenbänder zerlegen, extrudieren); die 3D-Vorschau nutzt three.js
 vom CDN. Der Server vereinigt die Bänder jeder Ebene mit manifold3d zu einem
 geschlossenen Körper und packt alles in die 3MF.
+
+## Ambigramm
+
+Unter „Ambigramm“ (`/#ambigramm`) entsteht aus zwei gleich langen Wörtern ein
+Objekt, das von vorne Wort 1 und von rechts Wort 2 zeigt. Jeder Buchstabe ist
+die Schnittmenge aus einem Buchstaben von Wort 1 (nach hinten extrudiert) und
+dem passenden Buchstaben von Wort 2 (zur Seite extrudiert).
+
+- Schriftart, Buchstabenhöhe und Abstand wählbar; jeder Buchstabe wird exakt
+  auf dieselbe Höhe gebracht. Kräftige Blockschriften funktionieren am besten.
+- Leerzeichen müssen in beiden Wörtern an derselben Stelle stehen.
+- Optionaler Sockel (Dicke, Rand) in eigener Farbe oder in der Farbe der
+  Buchstaben; die Buchstaben verschmelzen mit ihm zu einem Stück.
+- Die Vorschau hat Knöpfe für „Wort 1“, „Wort 2“ (verzerrungsfreie
+  Parallelprojektion) und eine Schrägansicht.
+- Der Server meldet Buchstabenpaare, bei denen von einem Buchstaben etwas
+  verloren geht (der andere hat auf gleicher Höhe nichts), und schwebende
+  Teile wie Umlaut-Punkte.
+
+Die Umrisse entstehen im Browser, die Schnittmengen berechnet der Server mit
+manifold3d (`POST /api/ambigramm`, `format` = `mesh` für die Vorschau oder
+`3mf`).
 
 ## Lasergravur
 

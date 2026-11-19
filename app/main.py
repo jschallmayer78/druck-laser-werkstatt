@@ -146,7 +146,7 @@ ASSET_VERSION = _asset_version()
 @app.get("/", response_class=HTMLResponse)
 def index():
     html = (STATIC / "index.html").read_text(encoding="utf-8")
-    html = html.replace('src="static/schriftzug.js"', f'src="static/schriftzug.js?v={ASSET_VERSION}"')
+    html = re.sub(r'src="static/(\w+)\.js"', lambda m: f'src="static/{m.group(1)}.js?v={ASSET_VERSION}"', html)
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
@@ -387,5 +387,107 @@ def schriftzug(model: TextModel):
         SLOTS.release()
 
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", title)[:60] or "schriftzug"
+    return Response(data, media_type="model/3mf",
+                    headers={"Content-Disposition": f'attachment; filename="{safe}.3mf"'})
+
+
+# ---------------------------------------------------------------- Ambigramm
+# Der Browser rendert die Buchstaben und schickt ihre Umrisse; der Server
+# bildet je Buchstabenpaar die Schnittmenge (manifold3d) und packt das Ergebnis
+# als Vorschau-Netz oder als 3MF.
+
+from .ambigram import build as build_ambigram
+
+Ring = List[List[float]]
+
+
+class AmbiLetter(BaseModel):
+    a: str = Field("", max_length=4)
+    b: str = Field("", max_length=4)
+    space: bool = False
+    front: List[Ring] = Field(default_factory=list, max_length=200)
+    side: List[Ring] = Field(default_factory=list, max_length=200)
+    wf: float = Field(gt=0, le=1000)
+    ws: float = Field(gt=0, le=1000)
+
+    @field_validator("front", "side")
+    @classmethod
+    def rings_ok(cls, rings):
+        total = 0
+        for r in rings:
+            if len(r) < 3:
+                raise ValueError("Umriss mit weniger als 3 Punkten")
+            for p in r:
+                if len(p) != 2 or not all(isinstance(c, (int, float)) and abs(c) < 1e4 for c in p):
+                    raise ValueError("ungültiger Punkt")
+            total += len(r)
+        if total > 50_000:
+            raise ValueError("Umriss zu detailliert")
+        return rings
+
+
+class AmbiModel(BaseModel):
+    title: str = Field("ambigramm", max_length=60)
+    letters: List[AmbiLetter] = Field(min_length=1, max_length=40)
+    gap: float = Field(2.0, ge=-50, le=100)
+    base_on: bool = True
+    base_thick: float = Field(3.0, ge=0.4, le=30)
+    base_margin: float = Field(3.0, ge=0, le=100)
+    same_color: bool = False
+    letter_color: str = "#C4392D"
+    letter_filament: str = Field("Buchstaben", max_length=30)
+    base_color: str = "#2B2B2B"
+    base_filament: str = Field("Sockel", max_length=30)
+    format: str = Field("mesh", pattern="^(mesh|3mf)$")
+    thumbnail: Optional[str] = Field(None, max_length=3_000_000)
+
+    @field_validator("letter_color", "base_color")
+    @classmethod
+    def hex_color(cls, v):
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", v):
+            raise ValueError("Farbe muss als #RRGGBB angegeben werden")
+        return v
+
+
+@app.post("/api/ambigramm")
+def ambigramm(model: AmbiModel):
+    for L in model.letters:
+        if not L.space and (not L.front or not L.side):
+            raise HTTPException(422, f"Für „{L.a or L.b}“ fehlt ein Umriss.")
+    if not SLOTS.acquire(timeout=300):
+        raise HTTPException(503, "Gerade laufen zu viele Berechnungen. Bitte in einer Minute erneut versuchen.")
+    try:
+        try:
+            parts, warnings = build_ambigram([L.model_dump() for L in model.letters], model.gap,
+                                             model.base_on, model.base_thick, model.base_margin, model.same_color)
+        except ValueError as ex:
+            raise HTTPException(422, str(ex))
+        style = {"letters": (model.letter_filament.strip() or "Buchstaben", model.letter_color.upper()),
+                 "base": (model.base_filament.strip() or "Sockel", model.base_color.upper())}
+        if model.format == "mesh":
+            return {
+                "warnings": warnings,
+                "parts": [{"name": n, "filament": style[r][0], "color": style[r][1],
+                           "verts": base64.b64encode(v.astype("<f4").tobytes()).decode(),
+                           "faces": base64.b64encode(f.astype("<u4").tobytes()).decode()}
+                          for n, v, f, r in parts],
+            }
+        slots, objparts = [], []
+        for n, v, f, r in parts:
+            if style[r] not in slots:
+                slots.append(style[r])
+            objparts.append(Part(name=n, slot=slots.index(style[r]) + 1, verts=v, faces=f))
+        title = model.title.strip() or "ambigramm"
+        thumb = None
+        if model.thumbnail and model.thumbnail.startswith("data:image/png;base64,"):
+            try:
+                thumb = base64.b64decode(model.thumbnail.split(",", 1)[1], validate=True)
+            except ValueError:
+                thumb = None
+        data = write_3mf([Obj(name=title, parts=objparts)], slots, thumbnail_png=thumb,
+                         arrange=False, title=title, decimals=6)
+    finally:
+        SLOTS.release()
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", title)[:60] or "ambigramm"
     return Response(data, media_type="model/3mf",
                     headers={"Content-Disposition": f'attachment; filename="{safe}.3mf"'})

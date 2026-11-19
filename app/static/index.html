@@ -165,6 +165,11 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
 .seg.kind { margin-bottom: 10px; }
 .viewhint { color: #9FB0C2; font-size: .85rem; margin: 10px 0 0; text-align: center; position: relative; z-index: 1; }
 .go.alt { background: var(--surface); color: var(--ink); border: 2px solid var(--ink); margin-top: 10px; font-size: 1rem; padding: 11px 20px; }
+#aView { width: 100%; height: 440px; position: relative; z-index: 1; cursor: grab; }
+#aView canvas { display: block; border-radius: var(--radius-s); }
+.aviews { display: flex; gap: 8px; justify-content: center; margin-bottom: 10px; position: relative; z-index: 1; flex-wrap: wrap; }
+.aviews .btn2[aria-pressed="true"] { border-color: var(--amber); background: #FFF6E5; }
+.awarn { margin: 0 0 14px; padding-left: 1.2em; color: #8A4B08; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -173,6 +178,7 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
   <header>
     <h1>Druck &amp; Laser Werkstatt</h1>
     <p id="introLitho">Aus deinen Fotos wird ein 3D-Druck, der erst im Gegenlicht sein Bild zeigt. Als Lampenschirm oder flache Platte, in Weiß oder in Farbe.</p>
+    <p id="introAmbi" hidden>Zwei Wörter in einem Objekt: von vorne liest man das eine, um 90° gedreht das andere. Jeder Buchstabe ist die Schnittmenge aus zwei Buchstaben.</p>
     <p id="introText" hidden>Aus bis zu vier Textebenen wird ein Schriftzug für den 3D-Druck: große Buchstaben hinten, kleinere Zeilen davor, jede in ihrer eigenen Farbe.</p>
     <p id="introLaser" hidden>Aus deinem Foto wird eine Gravurvorlage für den Laser, passend aufbereitet für Schiefer, Holz, Leder oder eloxiertes Aluminium.</p>
   </header>
@@ -180,6 +186,7 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
   <div class="modes" role="tablist" aria-label="Werkzeug">
     <button type="button" role="tab" id="tabLitho" aria-controls="modeLitho" aria-selected="true">Lithophane (3D-Druck)</button>
     <button type="button" role="tab" id="tabText" aria-controls="modeText" aria-selected="false">Schriftzug (3D-Druck)</button>
+    <button type="button" role="tab" id="tabAmbi" aria-controls="modeAmbi" aria-selected="false">Ambigramm (3D-Druck)</button>
     <button type="button" role="tab" id="tabLaser" aria-controls="modeLaser" aria-selected="false">Lasergravur</button>
   </div>
 
@@ -390,6 +397,87 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
         <div class="stats" id="tStats"></div>
         <h3>So geht es weiter</h3>
         <ol id="tHowto"></ol>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid" id="modeAmbi" role="tabpanel" aria-labelledby="tabAmbi" hidden>
+    <form id="aForm" novalidate>
+      <ol class="steps">
+        <li class="step done">
+          <h2>Wörter</h2>
+          <div class="fields">
+            <label class="f">Wort 1 – von vorne<input type="text" id="aWord1" class="textin" value="LIEBE" maxlength="40"></label>
+            <label class="f">Wort 2 – von rechts<input type="text" id="aWord2" class="textin" value="GLÜCK" maxlength="40"></label>
+          </div>
+          <label class="check"><input type="checkbox" id="aUpper" checked><span>In Großbuchstaben umwandeln (empfohlen)</span></label>
+          <p class="hint">Beide Wörter brauchen gleich viele Zeichen; Leerzeichen müssen an derselben Stelle stehen. Der 1. Buchstabe von Wort 1 wird mit dem 1. von Wort 2 kombiniert, und so weiter.</p>
+        </li>
+
+        <li class="step done">
+          <h2>Schrift und Maße</h2>
+          <label class="f">Schriftart<select id="aFont"></select></label>
+          <div class="fields sub">
+            <label class="f">Buchstabenhöhe (mm)<input type="number" id="aHeight" value="30" min="5" max="300" step="1"></label>
+            <label class="f">Abstand zwischen Buchstaben (mm)<input type="number" id="aGap" value="2" min="-20" max="50" step="0.5"></label>
+          </div>
+          <p class="hint">Am besten funktionieren kräftige Blockschriften (z. B. Archivo Black, Anton, Bebas Neue). Jeder Buchstabe wird auf genau die gleiche Höhe gebracht, damit die Paare zusammenpassen.</p>
+        </li>
+
+        <li class="step done">
+          <h2>Sockel und Farben</h2>
+          <div class="fields">
+            <label class="f">Farbe der Buchstaben<input type="color" id="aColor" value="#C4392D"></label>
+            <label class="f">Filament<input type="text" id="aName" value="Rot" maxlength="30"></label>
+          </div>
+          <label class="check"><input type="checkbox" id="aBaseOn" checked><span>Sockel unter den Buchstaben (verbindet sie zu einem Stück)</span></label>
+          <div id="aBaseRow">
+            <div class="fields">
+              <label class="f">Dicke (mm)<input type="number" id="aBaseThick" value="3" min="0.6" max="30" step="0.2"></label>
+              <label class="f">Rand (mm)<input type="number" id="aBaseMargin" value="3" min="0" max="50" step="0.5"></label>
+              <label class="f" id="aBaseColorL">Farbe des Sockels<input type="color" id="aBaseColor" value="#2B2B2B"></label>
+              <label class="f" id="aBaseNameL">Filament<input type="text" id="aBaseName" value="Schwarz" maxlength="30"></label>
+            </div>
+            <label class="check"><input type="checkbox" id="aSame"><span>Sockel in der Farbe der Buchstaben</span></label>
+          </div>
+        </li>
+
+        <li class="step" id="a4">
+          <h2>Herunterladen</h2>
+          <label class="f">Dateiname<input type="text" id="aFile" value="ambigramm" maxlength="60"></label>
+          <button type="submit" class="go" id="aGo">3MF herunterladen</button>
+          <p class="error" id="aError" role="alert" hidden></p>
+          <p class="hint" id="aStatus" aria-live="polite"></p>
+        </li>
+      </ol>
+    </form>
+
+    <section class="stage" aria-label="Vorschau Ambigramm">
+      <div class="box" id="aBox">
+        <div class="empty" id="aEmpty"><strong>Hier entsteht dein Ambigramm</strong>Die Vorschau aktualisiert sich bei jeder Änderung.</div>
+        <div id="aWrap" style="width:100%" hidden>
+          <div class="aviews">
+            <button type="button" class="btn2" data-aview="front">Wort 1 (vorne)</button>
+            <button type="button" class="btn2" data-aview="side">Wort 2 (rechts)</button>
+            <button type="button" class="btn2" data-aview="iso" aria-pressed="true">Schräg</button>
+          </div>
+          <div id="aView"></div>
+          <p class="viewhint">Ziehen dreht · Rechtsklick verschiebt · Mausrad zoomt</p>
+        </div>
+      </div>
+      <div class="result" id="aResult" hidden>
+        <div id="aWarnBox" hidden>
+          <h3>Hinweise zu Buchstabenpaaren</h3>
+          <ul id="aWarn" class="awarn"></ul>
+        </div>
+        <ul class="legend" id="aLegend"></ul>
+        <div class="stats" id="aStats"></div>
+        <h3>So geht es weiter</h3>
+        <ol>
+          <li>Mit „Wort 1“ und „Wort 2“ über der Vorschau prüfen, ob beide Wörter gut lesbar sind.</li>
+          <li>3MF in Bambu Studio, Orca Slicer oder PrusaSlicer öffnen. Buchstaben und Sockel sind ihren Filamenten schon zugeordnet.</li>
+          <li>Schichthöhe 0,12–0,2 mm, keine Stützen nötig. Bei schmalen Stellen die Buchstabenhöhe erhöhen.</li>
+        </ol>
       </div>
     </section>
   </div>
@@ -673,6 +761,7 @@ function show(j, o) {
 const MODES = {
   litho: { tab: "#tabLitho", panel: "#modeLitho", intro: "#introLitho", title: "Lithophane – Druck & Laser Werkstatt", hash: "" },
   text:  { tab: "#tabText",  panel: "#modeText",  intro: "#introText",  title: "Schriftzug – Druck & Laser Werkstatt", hash: "#schriftzug" },
+  ambi:  { tab: "#tabAmbi",  panel: "#modeAmbi",  intro: "#introAmbi",  title: "Ambigramm – Druck & Laser Werkstatt", hash: "#ambigramm" },
   laser: { tab: "#tabLaser", panel: "#modeLaser", intro: "#introLaser", title: "Lasergravur – Druck & Laser Werkstatt", hash: "#laser" },
 };
 function setMode(m) {
@@ -684,10 +773,12 @@ function setMode(m) {
   document.title = MODES[m].title;
   history.replaceState(null, "", MODES[m].hash || location.pathname + location.search);
   if (m === "text" && window.Schriftzug) window.Schriftzug.activate();
+  if (m === "ambi" && window.Ambigramm) window.Ambigramm.activate();
 }
 for (const k of Object.keys(MODES)) $(MODES[k].tab).addEventListener("click", () => setMode(k));
 if (location.hash === "#laser") setMode("laser");
 if (location.hash === "#schriftzug") setMode("text");
+if (location.hash === "#ambigramm") setMode("ambi");
 
 /* ------------------------------------------------------------ Lasergravur */
 let lFile = null;
@@ -785,5 +876,6 @@ function lShow(j, o) {
 }
 </script>
 <script src="static/schriftzug.js" defer></script>
+<script src="static/ambigramm.js" defer></script>
 </body>
 </html>
