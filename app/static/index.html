@@ -162,6 +162,7 @@ summary { cursor: pointer; font-family: var(--display); font-weight: 700; }
 label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
 .textin { font-size: 1.15rem !important; }
 .tcount { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.seg.kind { margin-bottom: 10px; }
 .viewhint { color: #9FB0C2; font-size: .85rem; margin: 10px 0 0; text-align: center; position: relative; z-index: 1; }
 .go.alt { background: var(--surface); color: var(--ink); border: 2px solid var(--ink); margin-top: 10px; font-size: 1rem; padding: 11px 20px; }
 [hidden] { display: none !important; }
@@ -363,6 +364,7 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
             <p class="hint" id="tGfHint" aria-live="polite"></p>
           </details>
           <input type="file" id="tFontFile" accept=".ttf,.otf,.woff,.woff2" hidden>
+          <input type="file" id="tSvgFile" accept=".svg,image/svg+xml" hidden>
         </li>
 
         <li class="step" id="t4">

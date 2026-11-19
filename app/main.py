@@ -381,7 +381,8 @@ def schriftzug(model: TextModel):
     if not SLOTS.acquire(timeout=300):
         raise HTTPException(503, "Gerade laufen zu viele Berechnungen. Bitte in einer Minute erneut versuchen.")
     try:
-        data = write_3mf(objects, slots, thumbnail_png=thumb, arrange=False, title=title)
+        # 6 Nachkommastellen: Berührpunkte (z. B. Aussparung an der Kontur) bleiben getrennt
+        data = write_3mf(objects, slots, thumbnail_png=thumb, arrange=False, title=title, decimals=6)
     finally:
         SLOTS.release()
 

@@ -54,7 +54,7 @@ def _layout(objects, arrange=True):
     return placed, pos
 
 
-def write_3mf(objects, slots, thumbnail_png=None, arrange=True, title="Lithophane"):
+def write_3mf(objects, slots, thumbnail_png=None, arrange=True, title="Lithophane", decimals=4):
     """objects: Liste Obj; slots: Liste (name, '#RRGGBB') für Filament 1..n.
     Liefert die 3MF-Datei als bytes."""
     placed, pos = _layout(objects, arrange)
@@ -80,7 +80,8 @@ def write_3mf(objects, slots, thumbnail_png=None, arrange=True, title="Lithophan
         offs, vols, tri0 = [], [], 0
         base = 0
         for part, v in parts:
-            w("".join(f'     <vertex x="{a:.4f}" y="{b:.4f}" z="{c:.4f}"/>\n' for a, b, c in v.tolist()))
+            fx = f".{decimals}f"
+            w("".join(f'     <vertex x="{a:{fx}}" y="{b:{fx}}" z="{c:{fx}}"/>\n' for a, b, c in v.tolist()))
             offs.append(base)
             base += len(v)
         w('    </vertices>\n    <triangles>\n')

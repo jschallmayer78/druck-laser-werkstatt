@@ -78,8 +78,80 @@ const scratch = document.createElement("canvas").getContext("2d");
 const REF = 200;
 const setLS = (ctx, px) => { if ("letterSpacing" in ctx) ctx.letterSpacing = px + "px"; };
 
+/* ------------------------------------------------------------ SVG-Grafiken als Ebene */
+const svgs = {};   // je Ebene: { name, src, vbW, vbH, ink: {x0,y0,x1,y1} als Anteil der Zeichenfläche }
+
+function svgUrl(S, w, h) {
+  const src = S.src.replace(/^<svg\b/, `<svg width="${w}" height="${h}"`);
+  return URL.createObjectURL(new Blob([src], { type: "image/svg+xml" }));
+}
+function loadImage(url) {
+  return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("Die SVG-Datei lässt sich nicht darstellen.")); im.src = url; });
+}
+async function loadSvgFile(file, k) {
+  const txt = await file.text();
+  const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
+  const svg = doc.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== "svg" || doc.querySelector("parsererror")) throw new Error("Das ist keine gültige SVG-Datei.");
+  let vb = (svg.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+  if (vb.length !== 4 || vb.some(x => !isFinite(x)) || vb[2] <= 0 || vb[3] <= 0) {
+    const w = parseFloat(svg.getAttribute("width")) || 100, h = parseFloat(svg.getAttribute("height")) || 100;
+    vb = [0, 0, w, h];
+    svg.setAttribute("viewBox", vb.join(" "));
+  }
+  svg.removeAttribute("width"); svg.removeAttribute("height");
+  svg.setAttribute("preserveAspectRatio", "none");
+  if (!svg.getAttribute("xmlns")) svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  const S = { name: file.name, src: new XMLSerializer().serializeToString(svg), vbW: vb[2], vbH: vb[3] };
+  // sichtbare Fläche bestimmen (Ränder in der Zeichenfläche abschneiden)
+  const ref = 1200, rw = Math.max(1, Math.round(S.vbW >= S.vbH ? ref : ref * S.vbW / S.vbH)), rh = Math.max(1, Math.round(S.vbH > S.vbW ? ref : ref * S.vbH / S.vbW));
+  const url = svgUrl(S, rw, rh);
+  try {
+    const im = await loadImage(url);
+    const c = document.createElement("canvas"); c.width = rw; c.height = rh;
+    const cg = c.getContext("2d", { willReadFrequently: true });
+    cg.drawImage(im, 0, 0, rw, rh);
+    let d;
+    try { d = cg.getImageData(0, 0, rw, rh).data; } catch (e) { throw new Error("Diese SVG kann der Browser nicht auslesen (z. B. wegen eingebetteter HTML-Inhalte)."); }
+    let x0 = rw, y0 = rh, x1 = -1, y1 = -1;
+    for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) if (d[(y * rw + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) throw new Error("Die SVG enthält keine sichtbare Fläche.");
+    S.ink = { x0: x0 / rw, y0: y0 / rh, x1: (x1 + 1) / rw, y1: (y1 + 1) / rh };
+  } finally { URL.revokeObjectURL(url); }
+  svgs[k] = S;
+  return S;
+}
+
+// Euklidische Abstandstransformation (Felzenszwalb) – wächst eine Maske um r Pixel
+function dilate(a, W, H, r) {
+  if (!(r > 0)) return a.slice();
+  const INF = 1e20, N = W * H, f = new Float32Array(N);
+  for (let i = 0; i < N; i++) f[i] = a[i] > 127 ? 0 : INF;
+  const n = Math.max(W, H), buf = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+  const pass = (len) => {
+    let k = 0; v[0] = 0; z[0] = -INF; z[1] = INF;
+    for (let q = 1; q < len; q++) {
+      let p = v[k], s = ((buf[q] + q * q) - (buf[p] + p * p)) / (2 * q - 2 * p);
+      while (s <= z[k]) { k--; p = v[k]; s = ((buf[q] + q * q) - (buf[p] + p * p)) / (2 * q - 2 * p); }
+      k++; v[k] = q; z[k] = s; z[k + 1] = INF;
+    }
+    k = 0;
+    for (let q = 0; q < len; q++) { while (z[k + 1] < q) k++; const p = v[k]; d[q] = (q - p) * (q - p) + buf[p]; }
+  };
+  for (let x = 0; x < W; x++) { for (let y = 0; y < H; y++) buf[y] = f[y * W + x]; pass(H); for (let y = 0; y < H; y++) f[y * W + x] = d[y]; }
+  for (let y = 0; y < H; y++) { const r0 = y * W; for (let x = 0; x < W; x++) buf[x] = f[r0 + x]; pass(W); for (let x = 0; x < W; x++) f[r0 + x] = d[x]; }
+  const o = new Uint8Array(N);
+  for (let i = 0; i < N; i++) { const val = (r + 0.5 - Math.sqrt(f[i])) * 255; const c = val > 255 ? 255 : val < 0 ? 0 : val; o[i] = a[i] > c ? a[i] : c; }
+  return o;
+}
+
 // Maße in mm, unabhängig von der Rasterauflösung
 function measureLine(L) {
+  if (L.kind === "svg") {
+    const S = L.svg; if (!S) return null;
+    const iw = (S.ink.x1 - S.ink.x0) * S.vbW, ih = (S.ink.y1 - S.ink.y0) * S.vbH;
+    return { w: L.height * iw / ih, h: L.height };
+  }
   if (!L.text.trim()) return null;
   const ctx = scratch;
   ctx.font = `${L.font.w} ${REF}px "${L.font.f}"`; setLS(ctx, 0);
@@ -284,17 +356,31 @@ function layerCard(k) {
     `<label class="opt"><input type="radio" name="${id("Mode")}" value="${v}"${d.mode === v ? " checked" : ""}><span><b>${t}</b><small>${s}</small></span></label>`;
   return `<li class="step done tlayer" id="${id("Card")}">
   <h2>Ebene ${k}${k === 1 ? " – ganz hinten" : ""}</h2>
+  <fieldset class="seg kind">
+    <legend>Inhalt</legend>
+    <label class="opt"><input type="radio" name="${id("Kind")}" value="text" checked><span><b>Text</b><small>Schrift aus der Liste</small></span></label>
+    <label class="opt"><input type="radio" name="${id("Kind")}" value="svg"><span><b>Grafik (SVG)</b><small>Logo, Symbol, Wappen …</small></span></label>
+  </fieldset>
+  <div id="${id("SvgBox")}" hidden>
+    <div class="tpick sub">
+      <p class="hint" id="${id("SvgName")}">Noch keine SVG-Datei gewählt.</p>
+      <button type="button" class="btn2" data-tsvg="${k}">SVG-Datei wählen …</button>
+    </div>
+    <p class="hint">Alles, was in der Grafik nicht durchsichtig ist, wird zur Fläche – Farben spielen keine Rolle.</p>
+  </div>
+  <div id="${id("TextBox")}">
   <label class="f">Text<input type="text" id="${id("Text")}" class="textin" value="${esc(d.text)}" maxlength="60"></label>
   <div class="tpick sub">
     <label class="f">Schriftart<select id="${id("Font")}" data-def="${d.font}"></select></label>
     <button type="button" class="btn2" data-tupload="${k}">Eigene Schrift …</button>
   </div>
+  </div>
   <div class="fields">
-    ${nf("Height", "Buchstabenhöhe (mm)", d.height, 3, 400, 1)}
+    ${nf("Height", "Höhe (mm)", d.height, 3, 400, 1)}
     ${front ? nf("Over", `Überstand über Ebene ${k - 1} (mm)`, d.over, 0, 50, 0.2)
               + nf("X", "Versatz waagrecht (mm)", d.x, -500, 500, 1) + nf("Y", "Versatz senkrecht (mm)", d.y, -500, 500, 1)
             : nf("Thick", "Dicke (mm)", d.thick, 0.6, 50, 0.2)}
-    ${nf("Spacing", "Buchstabenabstand (mm)", d.spacing, -20, 50, 0.5)}
+    <span id="${id("SpacingL")}" style="display:contents">${nf("Spacing", "Buchstabenabstand (mm)", d.spacing, -20, 50, 0.5)}</span>
     ${nf("Grow", "Verstärkung (mm)", d.grow, 0, 20, 0.1)}
     ${front ? nf("Rim", `Rand in Farbe von Ebene ${k - 1} (mm)`, d.rim, 0, 20, 0.5) : ""}
     <label class="f">Farbe<input type="color" id="${id("Color")}" value="${d.color}"></label>
@@ -327,6 +413,7 @@ function layerParams(k) {
   const v = (f, d) => { const el = g(f); const x = el ? parseFloat(el.value) : NaN; return isFinite(x) ? x : d; };
   const L = {
     k, text: g("Text").value, font: fontMap.get(g("Font").value) || FONTS[0],
+    kind: (document.querySelector(`input[name=t${k}Kind]:checked`) || { value: "text" }).value, svg: svgs[k] || null,
     height: Math.max(1, v("Height", 20)), spacing: v("Spacing", 0), grow: Math.max(0, v("Grow", 0)),
     color: g("Color").value.toUpperCase(), filament: g("Name").value.trim() || `Ebene ${k}`, x: 0, y: 0,
   };
@@ -377,9 +464,10 @@ const mSame = (a, b) => { if (!a || !b) return false; for (let i = 0; i < a.leng
  */
 async function generate(P) {
   const all = P.layers;
-  if (!all[0].text.trim()) throw new Error("Ebene 1 braucht einen Text.");
-  const Ls = all.filter(L => L.text.trim());
-  await Promise.all(Ls.map(L => loadFont(L.font, L.text)));
+  const has = (L) => L.kind === "svg" ? !!L.svg : !!L.text.trim();
+  if (!has(all[0])) throw new Error(all[0].kind === "svg" ? "Für Ebene 1 bitte eine SVG-Datei wählen." : "Ebene 1 braucht einen Text.");
+  const Ls = all.filter(has);
+  await Promise.all(Ls.filter(L => L.kind !== "svg").map(L => loadFont(L.font, L.text)));
   for (const L of Ls) L.M = measureLine(L);
   const layers = Ls.filter(L => L.M);
   if (!layers.length || layers[0].k !== 1) throw new Error("Ebene 1 ergibt keine druckbare Fläche.");
@@ -424,7 +512,26 @@ async function generate(P) {
     for (let j = 0; j < H; j++) { a[j * W] = 0; a[j * W + W - 1] = 0; }
     return a;
   };
-  const raster = (L, strokeMm) => {
+  const svgBase = new Map();   // Raster der Grafik ohne Verstärkung, je Ebene einmal
+  const raster = async (L, strokeMm) => {
+    if (L.kind === "svg") {
+      if (!svgBase.has(L)) {
+        const S = L.svg, ink = S.ink;
+        const fh = L.height * q / (ink.y1 - ink.y0), fw = fh * S.vbW / S.vbH;
+        const url = svgUrl(S, Math.max(1, Math.round(fw)), Math.max(1, Math.round(fh)));
+        try {
+          const im = await loadImage(url);
+          const cx = ox + L.x * q, cy = oy - L.y * q;
+          g.clearRect(0, 0, W, H);
+          g.drawImage(im, cx - (ink.x0 + ink.x1) / 2 * fw, cy - (ink.y0 + ink.y1) / 2 * fh, fw, fh);
+          let a;
+          try { a = readAlpha(); } catch (e) { throw new Error("Diese SVG kann der Browser nicht auslesen."); }
+          for (let i = 0; i < a.length; i++) if (a[i] <= 20) a[i] = 0;   // Hauch von Transparenz ignorieren
+          svgBase.set(L, a);
+        } finally { URL.revokeObjectURL(url); }
+      }
+      return dilate(svgBase.get(L), W, H, strokeMm * q);
+    }
     g.clearRect(0, 0, W, H); g.fillStyle = "#000"; g.strokeStyle = "#000";
     drawLine(g, L, L.M, q, ox + L.x * q, oy - L.y * q, strokeMm);
     return readAlpha();
@@ -433,7 +540,7 @@ async function generate(P) {
   if (BP.on) {
     if (BP.shape === "contour") {
       for (const L of layers) {
-        const m = raster(L, L.grow + (L.rim || 0) + (L.insert ? L.clearance : 0) + BP.margin);
+        const m = await raster(L, L.grow + (L.rim || 0) + (L.insert ? L.clearance : 0) + BP.margin);
         baseMask = baseMask ? mUnionInto(baseMask, m) : m;
       }
     } else if (BP.shape === "rect") {
@@ -449,9 +556,9 @@ async function generate(P) {
     }
   }
   for (const L of layers) {
-    L.F = raster(L, L.grow);
-    if (L.rim > 0) L.D = raster(L, L.grow + L.rim);
-    if (L.insert) L.Pk = raster(L, L.grow + L.clearance);
+    L.F = await raster(L, L.grow);
+    if (L.rim > 0) L.D = await raster(L, L.grow + L.rim);
+    if (L.insert) L.Pk = await raster(L, L.grow + L.clearance);
   }
   if (BP.on && BP.shape === "oval") {
     // kleinste Ellipse (Seitenverhältnis des Inhalts), die alle Schriftpixel umschließt, plus Rand
@@ -821,7 +928,12 @@ function loadScript(src) {
 
 function hints() {
   const n = layerCount();
-  for (let k = 1; k <= MAXL; k++) $(`#t${k}Card`).hidden = k > n;
+  for (let k = 1; k <= MAXL; k++) {
+    $(`#t${k}Card`).hidden = k > n;
+    const svg = (document.querySelector(`input[name=t${k}Kind]:checked`) || { value: "text" }).value === "svg";
+    $(`#t${k}SvgBox`).hidden = !svg; $(`#t${k}TextBox`).hidden = svg;
+    $(`#t${k}SpacingL`).hidden = svg;
+  }
   for (let k = 2; k <= MAXL; k++) {
     const m = (document.querySelector(`input[name=t${k}Mode]:checked`) || { value: "embedded" }).value;
     const ins = $(`#t${k}Insert`).checked;
@@ -862,7 +974,7 @@ async function activate() {
   }
   initView();
   $$("#tForm input, #tForm select").forEach(el => {
-    if (["tName", "tGfName", "tFontFile", "tAssembly"].includes(el.id)) return;
+    if (["tName", "tGfName", "tFontFile", "tSvgFile", "tAssembly"].includes(el.id)) return;
     el.addEventListener("input", schedule);
     el.addEventListener("change", () => { hints(); schedule(); });
   });
@@ -871,12 +983,23 @@ async function activate() {
   $("#tSvg").addEventListener("click", downloadSvg);
   $$("[data-tupload]").forEach(b => b.addEventListener("click", () => { uploadTarget = b.dataset.tupload; $("#tFontFile").value = ""; $("#tFontFile").click(); }));
   $("#tFontFile").addEventListener("change", (e) => { const f = e.target.files[0]; if (f) addFontFile(f); });
+  $$("[data-tsvg]").forEach(b => b.addEventListener("click", () => { svgTarget = b.dataset.tsvg; $("#tSvgFile").value = ""; $("#tSvgFile").click(); }));
+  $("#tSvgFile").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const k = svgTarget;
+    try {
+      const S = await loadSvgFile(f, k);
+      $(`#t${k}SvgName`).textContent = `${S.name} · Seitenverhältnis ${de((S.ink.x1 - S.ink.x0) * S.vbW / ((S.ink.y1 - S.ink.y0) * S.vbH), 2)} : 1`;
+      const r = document.querySelector(`input[name=t${k}Kind][value=svg]`); if (r) r.checked = true;
+      hints(); schedule();
+    } catch (ex) { $("#tError").textContent = ex.message; $("#tError").hidden = false; }
+  });
   $("#tGfAdd").addEventListener("click", addGoogleFont);
   $("#tGfName").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addGoogleFont(); } });
   run();
 }
 
-let uploadTarget = "1";
+let uploadTarget = "1", svgTarget = "1";
 async function addFontFile(file) {
   try {
     const fam = "Eigene – " + file.name.replace(/\.[^.]+$/, "");

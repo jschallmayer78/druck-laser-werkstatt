@@ -41,6 +41,11 @@ eigenes Filament.
 
 - **Schriften:** rund 35 Google-Schriften (Block- und Schreibschriften),
   weitere per Name hinzufügbar oder als eigene TTF/OTF/WOFF-Datei.
+- **Grafik statt Text:** Jede Ebene kann statt Text eine SVG-Datei sein
+  (Logo, Symbol, Wappen). Alles, was in der Grafik nicht durchsichtig ist,
+  wird zur Fläche; Höhe, Versatz, Verstärkung, Rand, Aufbau, Einlegeteil,
+  Basisplatte und Ständer funktionieren wie bei Text. Leere Ränder der
+  Zeichenfläche werden ignoriert, Skripte in der SVG nicht ausgeführt.
 - **Einstellungen je Ebene:** Text, Buchstabenhöhe in mm, Buchstabenabstand,
   Verstärkung (macht dünne Schriften druckfester), Farbe und Filamentname.
   Ebene 1 hat eine Dicke, jede weitere Ebene Versatz, Überstand über die
