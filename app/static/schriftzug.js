@@ -1028,5 +1028,7 @@ async function addGoogleFont() {
 }
 
 window.Schriftzug = { activate };
+// gemeinsame Werkzeuge für den Ambigramm-Reiter
+window.Werkstatt = { FONTS, fontMap, fontKey, linkFont, loadFont, fillFontSelect, maskToShapes, loadScript, THREE_URL, ORBIT_URL, de, esc };
 if (!$("#modeText").hidden) activate();
 })();
