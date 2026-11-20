@@ -1109,7 +1109,16 @@ async function addGoogleFont() {
   $("#tGfName").value = "";
 }
 
-window.Schriftzug = { activate };
+// SVG von außen (z. B. aus dem Vektorisieren-Reiter) als Grafik in Ebene k übernehmen
+async function useSvg(k, file) {
+  await activate();
+  const S = await loadSvgFile(file, String(k));
+  if (layerCount() < k) { const r = document.querySelector(`input[name=tCount][value="${k}"]`); if (r) r.checked = true; }
+  const r = document.querySelector(`input[name=t${k}Kind][value=svg]`); if (r) r.checked = true;
+  $(`#t${k}SvgName`).textContent = `${S.name} · Seitenverhältnis ${de((S.ink.x1 - S.ink.x0) * S.vbW / ((S.ink.y1 - S.ink.y0) * S.vbH), 2)} : 1`;
+  hints(); schedule();
+}
+window.Schriftzug = { activate, useSvg };
 // gemeinsame Werkzeuge für den Ambigramm-Reiter
 window.Werkstatt = { FONTS, fontMap, fontKey, linkFont, loadFont, fillFontSelect, enhanceFontSelect, maskToShapes, loadScript, THREE_URL, ORBIT_URL, de, esc };
 if (!$("#modeText").hidden) activate();

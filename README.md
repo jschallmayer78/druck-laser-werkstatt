@@ -1,7 +1,7 @@
 # Druck & Laser Werkstatt
 
 Webservice, der aus Fotos und Text druckfertige Vorlagen für 3D-Drucker und
-Laser erzeugt. Vier Werkzeuge, umschaltbar oben auf der Seite:
+Laser erzeugt. Fünf Werkzeuge, umschaltbar oben auf der Seite:
 
 - **Lithophane (3D-Druck):** Fotos oder SVG-Grafiken als Lampenschirm (Zylinder, optional mit
   Boden und Deckel) oder flache Platte, einfarbig oder mehrfarbig.
@@ -9,6 +9,8 @@ Laser erzeugt. Vier Werkzeuge, umschaltbar oben auf der Seite:
   hinten und kleinere Zeilen davor, jede in eigener Farbe.
 - **Ambigramm (3D-Druck):** zwei Wörter in einem Objekt – von vorne liest
   man das eine, um 90° gedreht das andere.
+- **Vektorisieren (Bild → SVG):** beliebige Grafik als saubere SVG, mit
+  Hintergrund entfernen und Invertieren.
 - **Lasergravur:** Fotos oder SVG-Grafiken als Gravurvorlage für Schiefer, Holz, Leder oder
   eloxiertes Aluminium.
 
@@ -112,6 +114,33 @@ dem passenden Buchstaben von Wort 2 (zur Seite extrudiert).
 Die Umrisse entstehen im Browser, die Schnittmengen berechnet der Server mit
 manifold3d (`POST /api/ambigramm`, `format` = `mesh` für die Vorschau oder
 `3mf`).
+
+## Vektorisieren (Bild → SVG)
+
+Unter „Vektorisieren“ (`/#vektor`) wird aus einem Foto, Logo oder einer
+Zeichnung (JPG, PNG, WebP, GIF, BMP, SVG; auch per Einfügen aus der
+Zwischenablage) eine SVG-Grafik.
+
+- **Voreinstellungen:** Logo, Illustration, Strichzeichnung, Plotter/Laser,
+  Foto – sie setzen die Regler, danach ist alles einstellbar.
+- **Nachzeichnen:** Farbe (Anzahl automatisch oder 2–16) oder Schwarz-Weiß
+  (Schwelle automatisch nach Otsu oder fest), Detail, Flecken entfernen,
+  glatte oder eckige Kurven, Farbflächen gestapelt oder ausgeschnitten.
+- **Hintergrund:** behalten, Randfarbe entfernen (Toleranz, auf Wunsch auch
+  innerhalb der Grafik) oder KI-Freistellung (wenn rembg installiert ist).
+- **Invertieren:** Farben umkehren bzw. bei Schwarz-Weiß Fläche und
+  Hintergrund tauschen.
+- **Vorschau:** nebeneinander, Vergleich mit Schieberegler, nur SVG,
+  Umrisse; Hintergrund Karo/hell/dunkel.
+- **Farben:** jede Farbe mit Anteil, umfärben oder ausblenden – ohne neues
+  Nachzeichnen.
+- **Ausgabe:** SVG, PNG in doppelter Größe, oder direkt weiter in den
+  Schriftzug (als Grafik-Ebene), die Lasergravur oder das Lithophane.
+
+Nachgezeichnet wird auf dem Server mit vtracer (`POST /api/vectorize`).
+Kleine Bilder werden vorher vergrößert, damit die Kanten glatt werden; die
+Farben werden per k-Means auf die häufigste echte Farbe jeder Gruppe
+reduziert, damit Kantenpixel sie nicht verfälschen.
 
 ## Lasergravur
 

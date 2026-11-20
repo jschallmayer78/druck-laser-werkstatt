@@ -491,3 +491,57 @@ def ambigramm(model: AmbiModel):
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", title)[:60] or "ambigramm"
     return Response(data, media_type="model/3mf",
                     headers={"Content-Disposition": f'attachment; filename="{safe}.3mf"'})
+
+
+# ---------------------------------------------------------------- Vektorisieren
+# Beliebige Grafik -> SVG (vtracer), mit Hintergrund entfernen und Invertieren.
+
+from .vectorize import vectorize as vectorize_run
+
+
+class VecOptions(BaseModel):
+    mode: Literal["color", "binary"] = "color"
+    colors: int = Field(0, ge=0, le=16)                 # 0 = automatisch
+    threshold: Optional[int] = Field(None, ge=1, le=254)  # None = automatisch (Otsu)
+    detail: int = Field(6, ge=1, le=10)                  # 1 = wenige Punkte, 10 = viele Details
+    speckle: int = Field(4, ge=0, le=200)                # Flecken kleiner als … px entfernen
+    curves: Literal["spline", "polygon"] = "spline"
+    layers: Literal["stacked", "cutout"] = "stacked"
+    background: Literal["none", "edge", "ai"] = "none"
+    tolerance: int = Field(40, ge=0, le=200)
+    bg_inside: bool = False
+    invert: bool = False
+
+
+@app.get("/api/vectorize/info")
+def vectorize_info():
+    return {"ai": engrave_bg.available(), "ai_reason": engrave_bg.unavailable_reason()}
+
+
+@app.post("/api/vectorize")
+def vectorize(file: UploadFile = File(...), options: str = Form("{}")):
+    try:
+        opts = VecOptions(**json.loads(options))
+    except (ValidationError, json.JSONDecodeError) as e:
+        raise HTTPException(422, f"Ungültige Einstellungen: {e}")
+    raw = file.file.read(MAX_FILE_MB * 1024 * 1024 + 1)
+    if len(raw) > MAX_FILE_MB * 1024 * 1024:
+        raise HTTPException(413, f"{file.filename} ist größer als {MAX_FILE_MB} MB.")
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img.load()
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
+        raise HTTPException(422, f"{file.filename} ist kein lesbares Bild (JPG, PNG, WebP, GIF, BMP …).")
+    o = opts.model_dump()
+    o["length"] = round(10.0 - 0.7 * (opts.detail - 1), 2)   # 10 … 3,7 px Mindestlänge je Kurvenstück
+    o["corner"] = 60
+    key = hashlib.sha1(raw).hexdigest()
+    mask_fn = engrave_bg.subject_mask if (opts.background == "ai" and engrave_bg.available()) else None
+    if not SLOTS.acquire(timeout=300):
+        raise HTTPException(503, "Gerade laufen zu viele Berechnungen. Bitte in einer Minute erneut versuchen.")
+    try:
+        return vectorize_run(img, key, o, subject_mask=mask_fn)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    finally:
+        SLOTS.release()

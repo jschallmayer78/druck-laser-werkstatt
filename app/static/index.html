@@ -168,7 +168,7 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
 #aView { width: 100%; height: 440px; position: relative; z-index: 1; cursor: grab; }
 #aView canvas { display: block; border-radius: var(--radius-s); }
 .aviews { display: flex; gap: 8px; justify-content: center; margin-bottom: 10px; position: relative; z-index: 1; flex-wrap: wrap; }
-.aviews .btn2[aria-pressed="true"] { border-color: var(--amber); background: rgba(232, 163, 61, .18); }
+.aviews .btn2[aria-pressed="true"] { border-color: var(--amber); background: var(--amber); color: #1B1407; font-weight: 600; }
 .awarn { margin: 0 0 14px; padding-left: 1.2em; color: #8A4B08; }
 /* Schriftauswahl mit Vorschau */
 select.fp-native { display: none !important; }
@@ -188,6 +188,36 @@ select.fp-native { display: none !important; }
 .fp-item:hover, .fp-item.act { background: rgba(232, 163, 61, .18); }
 .fp-item.sel { box-shadow: inset 3px 0 0 var(--amber); }
 .fp-sample { font-size: 1.4rem; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Vektorisieren */
+.vpresets { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.vscale { display: flex; justify-content: space-between; font-size: .75rem; }
+.vbtns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.vstage { position: relative; z-index: 1; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.vstage figure { margin: 0; border-radius: var(--radius-s); overflow: hidden; }
+.vstage img { display: block; width: 100%; height: 420px; object-fit: contain; }
+.vstage figcaption { font-size: .78rem; color: #9FB0C2; text-align: center; padding: 4px 0; }
+.vstage[data-bd="check"] img { background: repeating-conic-gradient(#d9dde3 0% 25%, #fff 0% 50%) 0 0 / 16px 16px; }
+.vstage[data-bd="light"] img { background: #fff; }
+.vstage[data-bd="dark"] img { background: #222831; }
+.vstage .vsplit { display: none; position: relative; grid-column: 1 / -1; border-radius: var(--radius-s); overflow: hidden; }
+.vstage .vsplit img { height: 460px; }
+.vstage .vsplit img:not(.vtop) { clip-path: inset(0 calc(100% - var(--split, 50%)) 0 0); }
+.vstage .vsplit .vtop { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--split, 50%)); }
+.vstage .vsplit::after { content: ""; position: absolute; top: 0; bottom: 0; left: var(--split, 50%); width: 2px; background: var(--amber); }
+.vstage[data-view="split"] .vpane { display: none; }
+.vstage[data-view="split"] .vsplit { display: block; }
+.vstage[data-view="svg"] .vp-orig, .vstage[data-view="outline"] .vp-orig { display: none; }
+.vstage[data-view="svg"], .vstage[data-view="outline"] { grid-template-columns: 1fr; }
+.vstage[data-view="svg"] img, .vstage[data-view="outline"] img { height: 460px; }
+.vsplitctl { display: none; color: #9FB0C2; font-size: .8rem; margin-top: 8px; position: relative; z-index: 1; }
+.vstage[data-view="split"] ~ .vsplitctl { display: block; }
+.vsplitctl input { width: 100%; }
+.vsw { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
+.vsw li { display: grid; grid-template-columns: 44px 1fr auto auto; gap: 10px; align-items: center; }
+.vsw li.off { opacity: .45; }
+.vsw input[type=color] { width: 44px; height: 32px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: pointer; }
+.vhex { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; }
+.vpc { font-size: .8rem; color: var(--muted); }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -198,6 +228,7 @@ select.fp-native { display: none !important; }
     <p id="introLitho">Aus deinen Fotos wird ein 3D-Druck, der erst im Gegenlicht sein Bild zeigt. Als Lampenschirm oder flache Platte, in Weiß oder in Farbe.</p>
     <p id="introAmbi" hidden>Zwei Wörter in einem Objekt: von vorne liest man das eine, um 90° gedreht das andere. Jeder Buchstabe ist die Schnittmenge aus zwei Buchstaben.</p>
     <p id="introText" hidden>Aus bis zu vier Textebenen wird ein Schriftzug für den 3D-Druck: große Buchstaben hinten, kleinere Zeilen davor, jede in ihrer eigenen Farbe.</p>
+    <p id="introVec" hidden>Aus einem Foto, Logo oder einer Zeichnung wird eine saubere SVG-Grafik – mit wenigen flachen Farben oder in Schwarz-Weiß, auf Wunsch ohne Hintergrund. Das Ergebnis lässt sich direkt im Schriftzug, als Lithophane oder für den Laser weiterverwenden.</p>
     <p id="introLaser" hidden>Aus deinem Foto wird eine Gravurvorlage für den Laser, passend aufbereitet für Schiefer, Holz, Leder oder eloxiertes Aluminium.</p>
   </header>
 
@@ -206,6 +237,7 @@ select.fp-native { display: none !important; }
     <button type="button" role="tab" id="tabText" aria-controls="modeText" aria-selected="false">Schriftzug (3D-Druck)</button>
     <button type="button" role="tab" id="tabAmbi" aria-controls="modeAmbi" aria-selected="false">Ambigramm (3D-Druck)</button>
     <button type="button" role="tab" id="tabLaser" aria-controls="modeLaser" aria-selected="false">Lasergravur</button>
+    <button type="button" role="tab" id="tabVec" aria-controls="modeVec" aria-selected="false">Vektorisieren (Bild → SVG)</button>
   </div>
 
   <div class="grid" id="modeLitho" role="tabpanel" aria-labelledby="tabLitho">
@@ -500,6 +532,132 @@ select.fp-native { display: none !important; }
     </section>
   </div>
 
+  <div class="grid" id="modeVec" role="tabpanel" aria-labelledby="tabVec" hidden>
+    <form id="vForm" novalidate>
+      <ol class="steps">
+        <li class="step" id="v1">
+          <h2>Grafik laden</h2>
+          <label class="drop" id="vDrop">
+            <input type="file" id="vFile" accept="image/*,.svg">
+            <strong>Grafik auswählen, hierher ziehen oder einfügen</strong>
+            <span class="hint">JPG, PNG, WebP, GIF, BMP oder SVG – Logos, Zeichnungen, auch Fotos. Einfügen mit Strg+V bzw. ⌘V.</span>
+          </label>
+          <ul class="thumbs" id="vThumb"></ul>
+        </li>
+
+        <li class="step done">
+          <h2>Voreinstellung</h2>
+          <fieldset class="seg vpresets">
+            <legend>Voreinstellung</legend>
+            <label class="opt"><input type="radio" name="vPreset" value="logo" checked><span><b>Logo</b><small>Wenige flache Farben, Hintergrund weg</small></span></label>
+            <label class="opt"><input type="radio" name="vPreset" value="illu"><span><b>Illustration</b><small>Mehr Farben, mit Hintergrund</small></span></label>
+            <label class="opt"><input type="radio" name="vPreset" value="line"><span><b>Strichzeichnung</b><small>Schwarz-Weiß, feine Linien</small></span></label>
+            <label class="opt"><input type="radio" name="vPreset" value="cut"><span><b>Plotter / Laser</b><small>Eine Farbe, ohne Hintergrund</small></span></label>
+            <label class="opt"><input type="radio" name="vPreset" value="photo"><span><b>Foto</b><small>Viele Farben, plakativ</small></span></label>
+          </fieldset>
+          <p class="hint">Die Voreinstellung setzt die Regler unten; danach kannst du alles anpassen.</p>
+        </li>
+
+        <li class="step done">
+          <h2>Nachzeichnen</h2>
+          <fieldset class="seg">
+            <legend>Modus</legend>
+            <label class="opt"><input type="radio" name="vMode" value="color" checked><span><b>Farbe</b><small>Flache Farbflächen</small></span></label>
+            <label class="opt"><input type="radio" name="vMode" value="binary"><span><b>Schwarz-Weiß</b><small>Eine Farbe, z. B. für Plotter</small></span></label>
+          </fieldset>
+          <div class="fields sub">
+            <label class="f" id="vColorsRow">Anzahl Farben
+              <select id="vColors"><option value="0">Automatisch</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>8</option><option>10</option><option>12</option><option>16</option></select>
+            </label>
+            <div id="vThreshRow" hidden>
+              <label class="f">Schwelle: <output id="vThreshOut">automatisch</output><input type="range" id="vThresh" min="1" max="254" value="128"></label>
+              <label class="check"><input type="checkbox" id="vThreshAuto" checked><span>automatisch</span></label>
+            </div>
+            <label class="f">Detail: <output id="vDetailOut">6</output><input type="range" id="vDetail" min="1" max="10" value="6"><span class="hint vscale"><span>weniger Punkte</span><span>mehr Details</span></span></label>
+            <label class="f">Flecken entfernen unter: <output id="vSpeckleOut">4 px</output><input type="range" id="vSpeckle" min="0" max="100" value="4"></label>
+          </div>
+          <details>
+            <summary>Feineinstellungen</summary>
+            <div class="fields">
+              <label class="f">Kurven<select id="vCurves"><option value="spline">Glatt (Kurven)</option><option value="polygon">Eckig (nur Geraden)</option></select></label>
+              <label class="f" id="vLayersL">Farbflächen<select id="vLayers"><option value="stacked">Gestapelt (überlappend)</option><option value="cutout">Ausgeschnitten (keine Überlappung)</option></select></label>
+            </div>
+            <p class="hint">„Ausgeschnitten“ ist gut für Folie und Laser: jede Farbe ist eine eigene Fläche ohne Überlappung. „Gestapelt“ ergibt weniger Pfade und keine Blitzer zwischen Farben.</p>
+          </details>
+        </li>
+
+        <li class="step done">
+          <h2>Hintergrund und Farben</h2>
+          <fieldset class="seg">
+            <legend>Hintergrund</legend>
+            <label class="opt"><input type="radio" name="vBg" value="none"><span><b>Behalten</b><small>Alles wird nachgezeichnet</small></span></label>
+            <label class="opt"><input type="radio" name="vBg" value="edge" checked><span><b>Randfarbe entfernen</b><small>Gut für Logos auf einfarbigem Grund</small></span></label>
+            <label class="opt"><input type="radio" name="vBg" value="ai"><span><b>KI-Freistellung</b><small>Für Fotos mit unruhigem Hintergrund</small></span></label>
+          </fieldset>
+          <p class="hint" id="vAiHint" hidden></p>
+          <div id="vEdgeRow">
+            <label class="f">Toleranz: <output id="vTolOut">40</output><input type="range" id="vTol" min="0" max="150" value="40"></label>
+            <label class="check"><input type="checkbox" id="vInside"><span>Diese Farbe auch innerhalb der Grafik entfernen (z. B. im „O“)</span></label>
+            <p class="hint" id="vBgHint"></p>
+          </div>
+          <label class="check"><input type="checkbox" id="vInvert"><span>Invertieren – Farben umkehren, bei Schwarz-Weiß Fläche und Hintergrund tauschen</span></label>
+        </li>
+
+        <li class="step" id="v5">
+          <h2>Speichern und weiterverwenden</h2>
+          <label class="f">Dateiname<input type="text" id="vName" value="grafik" maxlength="60"></label>
+          <button type="submit" class="go" id="vGo">SVG herunterladen</button>
+          <div class="vbtns">
+            <button type="button" class="btn2" id="vPng">PNG (doppelte Größe)</button>
+            <button type="button" class="btn2" id="vToLaser">Für Lasergravur verwenden</button>
+            <button type="button" class="btn2" id="vToLitho">Als Lithophane verwenden</button>
+          </div>
+          <div class="tpick sub">
+            <label class="f">Im Schriftzug als Grafik in
+              <select id="vLayerSel"><option value="1">Ebene 1</option><option value="2" selected>Ebene 2</option><option value="3">Ebene 3</option><option value="4">Ebene 4</option></select>
+            </label>
+            <button type="button" class="btn2" id="vToText">Übernehmen</button>
+          </div>
+          <p class="error" id="vError" role="alert" hidden></p>
+          <p class="hint" id="vStatus" aria-live="polite"></p>
+        </li>
+      </ol>
+    </form>
+
+    <section class="stage" aria-label="Vorschau Vektorgrafik">
+      <div class="box" id="vBox">
+        <div class="empty" id="vEmpty"><strong>Hier erscheint deine Vektorgrafik</strong>Lade eine Grafik – das Nachzeichnen startet sofort.</div>
+        <div id="vWrap" style="width:100%" hidden>
+          <div class="aviews">
+            <button type="button" class="btn2" data-vview="side" aria-pressed="true">Nebeneinander</button>
+            <button type="button" class="btn2" data-vview="split">Vergleich</button>
+            <button type="button" class="btn2" data-vview="svg">Nur SVG</button>
+            <button type="button" class="btn2" data-vview="outline">Umrisse</button>
+            <button type="button" class="btn2" id="vBackdrop">Hintergrund: Karo</button>
+          </div>
+          <div class="vstage" id="vStage" data-view="side" data-bd="check">
+            <figure class="vpane vp-orig"><img class="vorig" alt="Original"><figcaption>Original</figcaption></figure>
+            <figure class="vpane vp-svg"><img class="vsvg" alt="Nachgezeichnete SVG"><figcaption>SVG</figcaption></figure>
+            <div class="vsplit"><img class="vorig" alt=""><img class="vsvg vtop" alt="Vergleich: links Original, rechts SVG"></div>
+          </div>
+          <label class="vsplitctl" id="vSplitL">Vergleich verschieben<input type="range" id="vSplit" min="0" max="100" value="50"></label>
+        </div>
+      </div>
+      <div class="result" id="vResult" hidden>
+        <h3>Farben</h3>
+        <ul class="vsw" id="vSwatches"></ul>
+        <p class="hint">Farbfeld anklicken zum Umfärben, „Ausblenden“ entfernt eine Farbe aus dem SVG. Beides wirkt sofort, ohne neues Nachzeichnen.</p>
+        <div class="stats" id="vStats"></div>
+        <h3>Gut zu wissen</h3>
+        <ol>
+          <li>Am besten klappen Logos und Grafiken mit klaren Kanten. Kleine oder unscharfe Bilder werden vor dem Nachzeichnen vergrößert.</li>
+          <li>Zu viele Flecken oder Farben? Weniger Farben wählen, „Flecken entfernen“ erhöhen und Detail in Richtung „weniger Punkte“ stellen.</li>
+          <li>Die SVG enthält nur Pfade – sie lässt sich in LightBurn, Cricut, Silhouette, Inkscape oder hier im Schriftzug weiterverwenden.</li>
+        </ol>
+      </div>
+    </section>
+  </div>
+
   <div class="grid" id="modeLaser" role="tabpanel" aria-labelledby="tabLaser" hidden>
     <form id="lForm" novalidate>
       <ol class="steps">
@@ -606,6 +764,7 @@ let palette = DEFAULTS.slice(0, 5).map(([name, color]) => ({ name, color }));
 /* SVG-Grafiken: im Browser in ein hochauflösendes PNG umwandeln (Transparenz bleibt erhalten).
    Gerendert wird als Bild, eingebettete Skripte laufen dabei nicht. */
 const isSvg = (f) => f && (f.type === "image/svg+xml" || /\.svg$/i.test(f.name));
+window.isSvg = isSvg;
 async function svgToPng(file, longSide = 3000) {
   const txt = await file.text();
   const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
@@ -819,6 +978,7 @@ const MODES = {
   litho: { tab: "#tabLitho", panel: "#modeLitho", intro: "#introLitho", title: "Lithophane – Druck & Laser Werkstatt", hash: "" },
   text:  { tab: "#tabText",  panel: "#modeText",  intro: "#introText",  title: "Schriftzug – Druck & Laser Werkstatt", hash: "#schriftzug" },
   ambi:  { tab: "#tabAmbi",  panel: "#modeAmbi",  intro: "#introAmbi",  title: "Ambigramm – Druck & Laser Werkstatt", hash: "#ambigramm" },
+  vec:   { tab: "#tabVec",   panel: "#modeVec",   intro: "#introVec",   title: "Vektorisieren – Druck & Laser Werkstatt", hash: "#vektor" },
   laser: { tab: "#tabLaser", panel: "#modeLaser", intro: "#introLaser", title: "Lasergravur – Druck & Laser Werkstatt", hash: "#laser" },
 };
 function setMode(m) {
@@ -831,11 +991,13 @@ function setMode(m) {
   history.replaceState(null, "", MODES[m].hash || location.pathname + location.search);
   if (m === "text" && window.Schriftzug) window.Schriftzug.activate();
   if (m === "ambi" && window.Ambigramm) window.Ambigramm.activate();
+  if (m === "vec" && window.Vektor) window.Vektor.activate();
 }
 for (const k of Object.keys(MODES)) $(MODES[k].tab).addEventListener("click", () => setMode(k));
 if (location.hash === "#laser") setMode("laser");
 if (location.hash === "#schriftzug") setMode("text");
 if (location.hash === "#ambigramm") setMode("ambi");
+if (location.hash === "#vektor") setMode("vec");
 
 /* ------------------------------------------------------------ Lasergravur */
 let lFile = null;
@@ -936,5 +1098,6 @@ function lShow(j, o) {
 </script>
 <script src="static/schriftzug.js" defer></script>
 <script src="static/ambigramm.js" defer></script>
+<script src="static/vektor.js" defer></script>
 </body>
 </html>
