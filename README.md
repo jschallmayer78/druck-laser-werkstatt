@@ -1,7 +1,7 @@
 # Druck & Laser Werkstatt
 
 Webservice, der aus Fotos und Text druckfertige Vorlagen für 3D-Drucker und
-Laser erzeugt. Fünf Werkzeuge, umschaltbar oben auf der Seite:
+Laser erzeugt. Sechs Werkzeuge, umschaltbar oben auf der Seite:
 
 - **Lithophane (3D-Druck):** Fotos oder SVG-Grafiken als Lampenschirm (Zylinder, optional mit
   Boden und Deckel) oder flache Platte, einfarbig oder mehrfarbig.
@@ -9,6 +9,8 @@ Laser erzeugt. Fünf Werkzeuge, umschaltbar oben auf der Seite:
   hinten und kleinere Zeilen davor, jede in eigener Farbe.
 - **Ambigramm (3D-Druck):** zwei Wörter in einem Objekt – von vorne liest
   man das eine, um 90° gedreht das andere.
+- **SVG → 3D (3MF):** farbige SVG-Grafik als Druckmodell, jede Farbe ein
+  eigenes Teil mit eigenem Filament und eigener Höhe.
 - **Vektorisieren (Bild → SVG):** beliebige Grafik als saubere SVG, mit
   Hintergrund entfernen und Invertieren.
 - **Lasergravur:** Fotos oder SVG-Grafiken als Gravurvorlage für Schiefer, Holz, Leder oder
@@ -142,6 +144,34 @@ Kleine Bilder werden vorher vergrößert, damit die Kanten glatt werden; die
 Farben werden per k-Means auf die häufigste echte Farbe jeder Gruppe
 reduziert, damit Kantenpixel sie nicht verfälschen.
 
+## SVG → 3D (3MF)
+
+Unter „SVG → 3D“ (`/#svg3d`) wird aus einer SVG-Grafik ein Druckmodell für
+den Mehrfarbdruck. Aus „Vektorisieren“ führt „Als 3D-Modell (3MF)“ direkt
+hierher.
+
+- **Farben:** Jede Füllfarbe (und jede Konturfarbe) wird ein eigenes Teil.
+  Überlappungen werden wie beim Zeichnen aufgelöst: was in der SVG später
+  kommt, liegt oben und schneidet darunterliegende Flächen aus. Die Teile
+  liegen damit passgenau nebeneinander, ohne sich zu durchdringen.
+- **Je Farbe:** verwenden oder weglassen (wird zum Loch), Filamentname,
+  Filamentfarbe, eigene Höhe (Relief). Gleiche Filamente teilen sich einen
+  Platz. Sehr ähnliche Farbtöne (±6 je Kanal) werden zusammengefasst.
+- **Größe:** Breite in mm, Dicke in mm; hat die SVG echte Einheiten (mm, cm,
+  in), lässt sich die Originalgröße übernehmen.
+- **Hintergrund:** Eine erste Fläche, die die ganze Grafik abdeckt, wird
+  erkannt und auf Wunsch weggelassen.
+- **Einfarbig:** alles als ein Teil.
+- **Grundplatte:** keine, entlang der Kontur (mit Rand) oder Rechteck; hält
+  lose Teile zusammen, die Farbteile stehen darauf.
+- **Hinweise:** Stellen schmaler als 0,4 mm, lose Teile, übersprungene Texte,
+  Bilder, Verläufe, Strichelungen, Masken.
+
+Gelesen wird die SVG mit svgelements (Pfade, Grundformen, Transformationen,
+`<use>`, Konturen mit Linienenden und Ecken), die Flächen rechnet
+manifold3d (`POST /api/svg3d`). Texte müssen vorher in Pfade umgewandelt
+werden.
+
 ## Lasergravur
 
 Über den Umschalter oben („Lasergravur“, direkt erreichbar unter `/#laser`)
@@ -210,6 +240,7 @@ diese Zuordnung direkt. Falls ein Slicer die Filamente nicht automatisch
 |---|---|---|
 | `MAX_FILES` | 6 | Bilder pro Auftrag |
 | `MAX_FILE_MB` | 25 | Größe je Bild |
+| `MAX_SVG_MB` | 10 | Größe einer SVG bei „SVG → 3D“ |
 | `MAX_PARALLEL` | 2 | gleichzeitige Berechnungen |
 | `KEEP_MINUTES` | 60 | Aufbewahrung der fertigen Dateien |
 | `JOB_DIR` | Temp-Verzeichnis | Ablage der fertigen Dateien |
@@ -229,3 +260,8 @@ PNG-Dateien. `GET /api/engrave/info` meldet, ob Freistellen verfügbar ist.
 Schriftzug: `POST /api/schriftzug` (JSON, siehe Klasse `TextModel`: Teile mit
 Name, Filament, Farbe und den Netzen als Base64 – Punkte float32, Dreiecke
 uint32) liefert direkt die 3MF-Datei.
+
+SVG → 3D: `POST /api/svg3d` (multipart: `file` = SVG, `options` = JSON, siehe
+Klasse `Svg3dOptions`) liefert mit `"format": "mesh"` Farbliste, Größe,
+Hinweise und Vorschau-Netze (Base64 wie beim Schriftzug), mit
+`"format": "3mf"` direkt die 3MF-Datei.
