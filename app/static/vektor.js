@@ -261,6 +261,11 @@ function activate() {
     catch (e) { const er = $("#tError"); er.textContent = e.message; er.hidden = false; }
   });
   $("#vToLaser").addEventListener("click", async () => { if (!needResult()) return; const f = await pngFile(2); window.setMode("laser"); window.lSet(f); });
+  $("#vTo3d").addEventListener("click", async () => {
+    if (!needResult()) return;
+    window.setMode("svg");
+    if (window.Svg3d) window.Svg3d.useFile(svgFile());
+  });
   $("#vToLitho").addEventListener("click", async () => { if (!needResult()) return; const f = await pngFile(2); window.setMode("litho"); window.addFiles([f]); });
   applyPreset("logo");
   hints();

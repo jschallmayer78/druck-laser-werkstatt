@@ -545,3 +545,109 @@ def vectorize(file: UploadFile = File(...), options: str = Form("{}")):
         raise HTTPException(422, str(e))
     finally:
         SLOTS.release()
+
+
+# ---------------------------------------------------------------- SVG → 3D
+# Farbige Vektorgrafik als Druckmodell: jede Füllfarbe wird ein eigenes Teil
+# mit eigenem Filament und eigener Höhe. Vorschau-Netz oder 3MF.
+
+from . import svg3d
+
+MAX_SVG_MB = int(os.getenv("MAX_SVG_MB", "10"))
+
+
+class Svg3dColor(BaseModel):
+    include: bool = True
+    height: Optional[float] = Field(None, ge=0.2, le=100)
+    filament: str = Field("", max_length=30)
+    color: Optional[str] = None
+
+    @field_validator("color")
+    @classmethod
+    def hex_color(cls, v):
+        if v is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", v):
+            raise ValueError("Farbe muss als #RRGGBB angegeben werden")
+        return v
+
+
+class Svg3dBase(BaseModel):
+    mode: Literal["none", "contour", "rect"] = "none"
+    thick: float = Field(2.0, ge=0.4, le=30)
+    margin: float = Field(3.0, ge=0, le=100)
+    filament: str = Field("Grundplatte", max_length=30)
+    color: str = "#2B2B2B"
+
+    @field_validator("color")
+    @classmethod
+    def hex_color(cls, v):
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", v):
+            raise ValueError("Farbe muss als #RRGGBB angegeben werden")
+        return v
+
+
+class Svg3dOptions(BaseModel):
+    width: float = Field(100.0, ge=5, le=1000)
+    thickness: float = Field(10.0, ge=0.2, le=100)
+    drop_background: bool = True
+    mono: bool = False
+    mono_filament: str = Field("Filament", max_length=30)
+    mono_color: str = "#2F2219"
+    colors: dict[str, Svg3dColor] = Field(default_factory=dict, max_length=256)
+    base: Svg3dBase = Field(default_factory=Svg3dBase)
+    format: Literal["mesh", "3mf"] = "mesh"
+    title: str = Field("modell", max_length=60)
+    thumbnail: Optional[str] = Field(None, max_length=900_000)
+
+    @field_validator("mono_color")
+    @classmethod
+    def hex_color(cls, v):
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", v):
+            raise ValueError("Farbe muss als #RRGGBB angegeben werden")
+        return v
+
+
+@app.post("/api/svg3d")
+def svg_to_3d(file: UploadFile = File(...), options: str = Form("{}")):
+    try:
+        opts = Svg3dOptions(**json.loads(options))
+    except (ValidationError, json.JSONDecodeError) as e:
+        raise HTTPException(422, f"Ungültige Einstellungen: {e}")
+    raw = file.file.read(MAX_SVG_MB * 1024 * 1024 + 1)
+    if len(raw) > MAX_SVG_MB * 1024 * 1024:
+        raise HTTPException(413, f"{file.filename} ist größer als {MAX_SVG_MB} MB.")
+    o = opts.model_dump()
+    o["colors"] = {k.upper(): v for k, v in o["colors"].items()}
+    if not SLOTS.acquire(timeout=300):
+        raise HTTPException(503, "Gerade laufen zu viele Berechnungen. Bitte in einer Minute erneut versuchen.")
+    try:
+        try:
+            parsed = svg3d.parse(raw)
+            parts, info = svg3d.build(parsed, o)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        if opts.format == "mesh":
+            return {**info, "parts": [
+                {"name": n, "filament": fil, "color": col,
+                 "verts": base64.b64encode(v.astype("<f4").tobytes()).decode(),
+                 "faces": base64.b64encode(f.astype("<u4").tobytes()).decode()}
+                for n, fil, col, v, f in parts]}
+        slots, objparts = [], []
+        for n, fil, col, v, f in parts:
+            key = (fil, col)
+            if key not in slots:
+                slots.append(key)
+            objparts.append(Part(name=n, slot=slots.index(key) + 1, verts=v, faces=f))
+        title = opts.title.strip() or "modell"
+        thumb = None
+        if opts.thumbnail and opts.thumbnail.startswith("data:image/png;base64,"):
+            try:
+                thumb = base64.b64decode(opts.thumbnail.split(",", 1)[1], validate=True)
+            except ValueError:
+                thumb = None
+        data = write_3mf([Obj(name=title, parts=objparts)], slots, thumbnail_png=thumb,
+                         arrange=False, title=title, decimals=6)
+    finally:
+        SLOTS.release()
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", title)[:60] or "modell"
+    return Response(data, media_type="model/3mf",
+                    headers={"Content-Disposition": f'attachment; filename="{safe}.3mf"'})

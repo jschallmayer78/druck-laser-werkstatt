@@ -167,6 +167,16 @@ label.f input[type=color] { height: 42px; padding: 3px; cursor: pointer; }
 .go.alt { background: var(--surface); color: var(--ink); border: 2px solid var(--ink); margin-top: 10px; font-size: 1rem; padding: 11px 20px; }
 #aView { width: 100%; height: 440px; position: relative; z-index: 1; cursor: grab; }
 #aView canvas { display: block; border-radius: var(--radius-s); }
+#sView { width: 100%; height: 440px; position: relative; z-index: 1; cursor: grab; }
+#sView canvas { display: block; border-radius: var(--radius-s); }
+.scolors { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
+.scolors li { display: grid; grid-template-columns: 26px 44px minmax(0, 1fr) 80px 56px; gap: 8px; align-items: center; }
+.scolors li.off > :not(.sinc) { opacity: .4; }
+.scolors.off { opacity: .4; pointer-events: none; }
+.scolors .sinc { margin: 0; }
+.scolors input[type=color] { width: 44px; height: 32px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: pointer; }
+.scolors input[type=text], .scolors input[type=number] { width: 100%; min-width: 0; }
+.scolhead { display: grid; grid-template-columns: 26px 44px minmax(0, 1fr) 80px 56px; gap: 8px; font-size: .8rem; color: var(--muted); margin-bottom: 4px; }
 .aviews { display: flex; gap: 8px; justify-content: center; margin-bottom: 10px; position: relative; z-index: 1; flex-wrap: wrap; }
 .aviews .btn2[aria-pressed="true"] { border-color: var(--amber); background: var(--amber); color: #1B1407; font-weight: 600; }
 .awarn { margin: 0 0 14px; padding-left: 1.2em; color: #8A4B08; }
@@ -229,6 +239,7 @@ select.fp-native { display: none !important; }
     <p id="introAmbi" hidden>Zwei Wörter in einem Objekt: von vorne liest man das eine, um 90° gedreht das andere. Jeder Buchstabe ist die Schnittmenge aus zwei Buchstaben.</p>
     <p id="introText" hidden>Aus bis zu vier Textebenen wird ein Schriftzug für den 3D-Druck: große Buchstaben hinten, kleinere Zeilen davor, jede in ihrer eigenen Farbe.</p>
     <p id="introVec" hidden>Aus einem Foto, Logo oder einer Zeichnung wird eine saubere SVG-Grafik – mit wenigen flachen Farben oder in Schwarz-Weiß, auf Wunsch ohne Hintergrund. Das Ergebnis lässt sich direkt im Schriftzug, als Lithophane oder für den Laser weiterverwenden.</p>
+    <p id="introSvg" hidden>Aus einer farbigen SVG-Grafik wird ein 3D-Druckmodell: jede Farbe ein eigenes Teil mit eigenem Filament und eigener Höhe – fertig für den Mehrfarbdruck.</p>
     <p id="introLaser" hidden>Aus deinem Foto wird eine Gravurvorlage für den Laser, passend aufbereitet für Schiefer, Holz, Leder oder eloxiertes Aluminium.</p>
   </header>
 
@@ -236,6 +247,7 @@ select.fp-native { display: none !important; }
     <button type="button" role="tab" id="tabLitho" aria-controls="modeLitho" aria-selected="true">Lithophane (3D-Druck)</button>
     <button type="button" role="tab" id="tabText" aria-controls="modeText" aria-selected="false">Schriftzug (3D-Druck)</button>
     <button type="button" role="tab" id="tabAmbi" aria-controls="modeAmbi" aria-selected="false">Ambigramm (3D-Druck)</button>
+    <button type="button" role="tab" id="tabSvg" aria-controls="modeSvg" aria-selected="false">SVG → 3D (3MF)</button>
     <button type="button" role="tab" id="tabLaser" aria-controls="modeLaser" aria-selected="false">Lasergravur</button>
     <button type="button" role="tab" id="tabVec" aria-controls="modeVec" aria-selected="false">Vektorisieren (Bild → SVG)</button>
   </div>
@@ -532,6 +544,99 @@ select.fp-native { display: none !important; }
     </section>
   </div>
 
+  <div class="grid" id="modeSvg" role="tabpanel" aria-labelledby="tabSvg" hidden>
+    <form id="sForm" novalidate>
+      <ol class="steps">
+        <li class="step" id="s1">
+          <h2>SVG laden</h2>
+          <label class="drop" id="sDrop">
+            <input type="file" id="sFile" accept=".svg,image/svg+xml">
+            <strong>SVG-Datei auswählen oder hierher ziehen</strong>
+            <span class="hint">Flächen und Konturen werden übernommen, jede Farbe als eigenes Teil. Fotos und Pixelbilder zuerst unter „Vektorisieren“ umwandeln.</span>
+          </label>
+          <ul class="thumbs" id="sThumb"></ul>
+        </li>
+
+        <li class="step done">
+          <h2>Größe und Dicke</h2>
+          <div class="fields">
+            <label class="f">Breite (mm)<input type="number" id="sWidth" value="150" min="5" max="1000" step="1"></label>
+            <label class="f">Dicke (mm)<input type="number" id="sThick" value="10" min="0.2" max="100" step="0.2"></label>
+          </div>
+          <button type="button" class="btn2" id="sNatural" hidden></button>
+          <p class="hint">Die Breite gilt für die Grafik selbst, ohne Rand der Grundplatte. Die Höhe ergibt sich aus dem Seitenverhältnis.</p>
+          <label class="check" id="sBgRow" hidden><input type="checkbox" id="sDropBg" checked><span>Hintergrundfläche weglassen (sie deckt die ganze Grafik ab)</span></label>
+          <label class="check"><input type="checkbox" id="sMono"><span>Einfarbig – alles als ein Teil</span></label>
+          <div class="fields sub" id="sMonoRow" hidden>
+            <label class="f">Farbe<input type="color" id="sMonoColor" value="#2F2219"></label>
+            <label class="f">Filament<input type="text" id="sMonoName" value="Filament" maxlength="30"></label>
+          </div>
+        </li>
+
+        <li class="step done" id="sColorsStep" hidden>
+          <h2>Farben</h2>
+          <div class="scolhead"><span></span><span>Farbe</span><span>Filament</span><span>Höhe (mm)</span><span>Anteil</span></div>
+          <ul class="scolors" id="sColors"></ul>
+          <p class="hint">Häkchen weg = Fläche wird zum Loch. Leere Höhe = Dicke von oben. Gleicher Filamentname und gleiche Farbe teilen sich einen Filament-Platz.</p>
+        </li>
+
+        <li class="step done">
+          <h2>Grundplatte</h2>
+          <fieldset class="seg">
+            <legend>Grundplatte</legend>
+            <label class="opt"><input type="radio" name="sBase" value="none" checked><span><b>Keine</b><small>Farbteile liegen direkt auf dem Druckbett</small></span></label>
+            <label class="opt"><input type="radio" name="sBase" value="contour"><span><b>Entlang der Kontur</b><small>Hält lose Teile zusammen</small></span></label>
+            <label class="opt"><input type="radio" name="sBase" value="rect"><span><b>Rechteck</b><small>Schild mit Rand</small></span></label>
+          </fieldset>
+          <div id="sBaseRow" hidden>
+            <div class="fields">
+              <label class="f">Dicke (mm)<input type="number" id="sBaseThick" value="2" min="0.4" max="30" step="0.2"></label>
+              <label class="f" id="sMarginL">Rand (mm)<input type="number" id="sBaseMargin" value="3" min="0" max="100" step="0.5"></label>
+              <label class="f">Farbe<input type="color" id="sBaseColor" value="#2B2B2B"></label>
+              <label class="f">Filament<input type="text" id="sBaseName" value="Grundplatte" maxlength="30"></label>
+            </div>
+          </div>
+        </li>
+
+        <li class="step" id="s5">
+          <h2>Herunterladen</h2>
+          <label class="f">Dateiname<input type="text" id="sFileName" value="modell" maxlength="60"></label>
+          <button type="submit" class="go" id="sGo">3MF herunterladen</button>
+          <p class="error" id="sError" role="alert" hidden></p>
+          <p class="hint" id="sStatus" aria-live="polite"></p>
+        </li>
+      </ol>
+    </form>
+
+    <section class="stage" aria-label="Vorschau SVG → 3D">
+      <div class="box" id="sBox">
+        <div class="empty" id="sEmpty"><strong>Hier entsteht dein 3D-Modell</strong>Lade eine SVG – die Vorschau aktualisiert sich bei jeder Änderung.</div>
+        <div id="sWrap" style="width:100%" hidden>
+          <div class="aviews">
+            <button type="button" class="btn2" data-sview="top">Von oben</button>
+            <button type="button" class="btn2" data-sview="iso" aria-pressed="true">Schräg</button>
+          </div>
+          <div id="sView"></div>
+          <p class="viewhint">Ziehen dreht · Rechtsklick verschiebt · Mausrad zoomt</p>
+        </div>
+      </div>
+      <div class="result" id="sResult" hidden>
+        <div id="sWarnBox" hidden>
+          <h3>Hinweise</h3>
+          <ul id="sWarn" class="awarn"></ul>
+        </div>
+        <ul class="legend" id="sLegend"></ul>
+        <div class="stats" id="sStats"></div>
+        <h3>So geht es weiter</h3>
+        <ol>
+          <li>3MF in Bambu Studio, Orca Slicer oder PrusaSlicer öffnen. Die Farbteile sind ihren Filamenten schon zugeordnet.</li>
+          <li>Die Teile liegen passgenau nebeneinander und durchdringen sich nicht. Unterschiedliche Höhen ergeben ein Relief.</li>
+          <li>Flach liegend drucken, keine Stützen nötig. Sehr feine Linien unter 0,4 mm lassen sich mit einer größeren Breite retten.</li>
+        </ol>
+      </div>
+    </section>
+  </div>
+
   <div class="grid" id="modeVec" role="tabpanel" aria-labelledby="tabVec" hidden>
     <form id="vForm" novalidate>
       <ol class="steps">
@@ -611,6 +716,7 @@ select.fp-native { display: none !important; }
             <button type="button" class="btn2" id="vPng">PNG (doppelte Größe)</button>
             <button type="button" class="btn2" id="vToLaser">Für Lasergravur verwenden</button>
             <button type="button" class="btn2" id="vToLitho">Als Lithophane verwenden</button>
+            <button type="button" class="btn2" id="vTo3d">Als 3D-Modell (3MF)</button>
           </div>
           <div class="tpick sub">
             <label class="f">Im Schriftzug als Grafik in
@@ -978,6 +1084,7 @@ const MODES = {
   litho: { tab: "#tabLitho", panel: "#modeLitho", intro: "#introLitho", title: "Lithophane – Druck & Laser Werkstatt", hash: "" },
   text:  { tab: "#tabText",  panel: "#modeText",  intro: "#introText",  title: "Schriftzug – Druck & Laser Werkstatt", hash: "#schriftzug" },
   ambi:  { tab: "#tabAmbi",  panel: "#modeAmbi",  intro: "#introAmbi",  title: "Ambigramm – Druck & Laser Werkstatt", hash: "#ambigramm" },
+  svg:   { tab: "#tabSvg",   panel: "#modeSvg",   intro: "#introSvg",   title: "SVG → 3D – Druck & Laser Werkstatt", hash: "#svg3d" },
   vec:   { tab: "#tabVec",   panel: "#modeVec",   intro: "#introVec",   title: "Vektorisieren – Druck & Laser Werkstatt", hash: "#vektor" },
   laser: { tab: "#tabLaser", panel: "#modeLaser", intro: "#introLaser", title: "Lasergravur – Druck & Laser Werkstatt", hash: "#laser" },
 };
@@ -992,12 +1099,14 @@ function setMode(m) {
   if (m === "text" && window.Schriftzug) window.Schriftzug.activate();
   if (m === "ambi" && window.Ambigramm) window.Ambigramm.activate();
   if (m === "vec" && window.Vektor) window.Vektor.activate();
+  if (m === "svg" && window.Svg3d) window.Svg3d.activate();
 }
 for (const k of Object.keys(MODES)) $(MODES[k].tab).addEventListener("click", () => setMode(k));
 if (location.hash === "#laser") setMode("laser");
 if (location.hash === "#schriftzug") setMode("text");
 if (location.hash === "#ambigramm") setMode("ambi");
 if (location.hash === "#vektor") setMode("vec");
+if (location.hash === "#svg3d") setMode("svg");
 
 /* ------------------------------------------------------------ Lasergravur */
 let lFile = null;
@@ -1099,5 +1208,6 @@ function lShow(j, o) {
 <script src="static/schriftzug.js" defer></script>
 <script src="static/ambigramm.js" defer></script>
 <script src="static/vektor.js" defer></script>
+<script src="static/svg3d.js" defer></script>
 </body>
 </html>
