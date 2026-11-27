@@ -105,7 +105,14 @@ class EngraveOptions(BaseModel):
     dpi: int = Field(318, ge=100, le=1000)
     remove_bg: bool = False
     crop: bool = True
-    dither: Literal["floyd", "ordered", "threshold", "none"] = "floyd"
+    kind: Optional[Literal["foto", "grafik"]] = None   # None = wie bisher, ohne Foto-Aufbereitung
+    dither: Literal["floyd", "jarvis", "stucki", "atkinson", "sierra", "halftone",
+                    "ordered", "threshold", "none"] = "floyd"
+    cell_mm: Optional[float] = Field(None, ge=0.2, le=3)   # Punktraster; None = passend zum Material
+    denoise: bool = True                                   # nur bei Fotos
+    local_contrast: float = Field(0.4, ge=0, le=1)         # nur bei Fotos
+    mirror: bool = False
+    max_burn: Optional[float] = Field(None, ge=0.3, le=1)  # höchste Gravurdichte; None = passend zum Material
     threshold: int = Field(128, ge=1, le=254)
     autocontrast: bool = True
     detail: float = Field(0.4, ge=0, le=1)   # Anteil Histogrammausgleich
@@ -217,7 +224,8 @@ def engrave_info():
     return {
         "remove_bg": engrave_bg.available(),
         "remove_bg_reason": engrave_bg.unavailable_reason(),
-        "materials": {k: {"name": v["name"], "invert": v["invert"], "gamma": v["gamma"]} for k, v in MATERIALS.items()},
+        "materials": {k: {"name": v["name"], "invert": v["invert"], "gamma": v["gamma"], "foto": v["foto"]}
+                      for k, v in MATERIALS.items()},
     }
 
 

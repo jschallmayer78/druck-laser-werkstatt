@@ -178,17 +178,40 @@ werden.
 bereitet die Werkstatt ein Foto als Gravurvorlage für Diodenlaser und
 CO₂-Laser auf:
 
-- **Material:** Schiefer und schwarz eloxiertes Aluminium (Gravur wird hell,
-  das Bild wird automatisch invertiert), Holz und Leder (Gravur wird dunkel).
+- **Bildart:** Foto oder Grafik/Logo, beim Hochladen automatisch erkannt.
+  Fotos bekommen eine eigene Aufbereitung: Rauschen glätten (Median),
+  lokaler Kontrast und eine Tonwertkurve je Material, die ausgleicht, dass
+  der Laserpunkt breiter brennt als ein Pixel. Grafiken werden mit
+  Schwellwert in klare Flächen umgesetzt.
+- **Material:** Schiefer, schwarz eloxiertes Aluminium und Glas (Gravur wird
+  hell bzw. mattweiß, das Bild wird automatisch invertiert), Holz und Leder
+  (Gravur wird dunkel). Für Fotos setzt jedes Material passende
+  Empfehlungen (Rasterung, DPI, Kurve):
+
+  | Material | Rasterung | DPI | Kurve | Besonderes |
+  |---|---|---|---|---|
+  | Schiefer | Jarvis | 318 | 1,15 | |
+  | Glas | Punktraster 0,5 mm | 254 | 1,25 | Dichte max. 75 %, Spiegeln an |
+  | Holz | Jarvis | 254 | 1,4 | |
+  | Leder | Stucki | 254 | 1,3 | |
+  | Alu eloxiert | Jarvis | 423 | 1,0 | |
+
+- **Glas:** Diodenlaser brauchen eine schwarze Beschichtung (Acryl-/
+  Temperafarbe, Markierspray). Das Punktraster und die begrenzte Dichte
+  halten die Punkte getrennt, damit nichts ausbricht. „Spiegeln“ erzeugt
+  die Vorlage für die Rückseite; die Vorschau zeigt die Ansicht von vorne.
 - **Größe und Auflösung:** Breite in mm und DPI passend zum Zeilenabstand
   der Lasersoftware (318 DPI = 0,08 mm). Die DPI stehen in der PNG-Datei,
   LightBurn übernimmt damit die Größe direkt.
 - **Hintergrund entfernen:** Das Motiv wird freigestellt (rembg), nur das
   Motiv wird graviert. Löcher im Motiv, die sich klar vom Hintergrund
   unterscheiden, werden automatisch gefüllt.
-- **Rasterung:** Fehlerstreuung (Floyd-Steinberg) für Fotos, gleichmäßige
-  Rasterpunkte, Schwellwert für Strichbilder oder nur Graustufen, wenn die
-  Lasersoftware rastern soll.
+- **Rasterung:** für Fotos Jarvis, Stucki, Atkinson, Floyd-Steinberg oder
+  Punktraster (runde Punkte im 45°-Gitter, Punktfläche = Grauwert); für
+  Grafiken Schwellwert oder gleichmäßige Rasterpunkte; oder nur Graustufen,
+  wenn die Lasersoftware rastern soll. Die Fehlerstreuung läuft vektorisiert
+  über Wellenfronten (`app/engrave/dither.py`), eine 150-mm-Gravur dauert
+  unter einer Sekunde.
 - **Ergebnis:** gerasterte 1-Bit-PNG (direkt gravieren, Modus
   „Threshold“/„Pass-Through“) und eine Graustufen-PNG, dazu eine Vorschau,
   wie es auf dem Material aussieht.
