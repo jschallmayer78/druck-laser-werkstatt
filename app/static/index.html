@@ -240,7 +240,7 @@ select.fp-native { display: none !important; }
     <p id="introText" hidden>Aus bis zu vier Textebenen wird ein Schriftzug für den 3D-Druck: große Buchstaben hinten, kleinere Zeilen davor, jede in ihrer eigenen Farbe.</p>
     <p id="introVec" hidden>Aus einem Foto, Logo oder einer Zeichnung wird eine saubere SVG-Grafik – mit wenigen flachen Farben oder in Schwarz-Weiß, auf Wunsch ohne Hintergrund. Das Ergebnis lässt sich direkt im Schriftzug, als Lithophane oder für den Laser weiterverwenden.</p>
     <p id="introSvg" hidden>Aus einer farbigen SVG-Grafik wird ein 3D-Druckmodell: jede Farbe ein eigenes Teil mit eigenem Filament und eigener Höhe – fertig für den Mehrfarbdruck.</p>
-    <p id="introLaser" hidden>Aus deinem Foto wird eine Gravurvorlage für den Laser, passend aufbereitet für Schiefer, Holz, Leder oder eloxiertes Aluminium.</p>
+    <p id="introLaser" hidden>Aus deinem Foto wird eine Gravurvorlage für den Laser, passend aufbereitet für Schiefer, Glas, Holz, Leder oder eloxiertes Aluminium – Fotos mit eigener Foto-Aufbereitung.</p>
   </header>
 
   <div class="modes" role="tablist" aria-label="Werkzeug">
@@ -772,9 +772,19 @@ select.fp-native { display: none !important; }
           <label class="drop" id="lDrop">
             <input type="file" id="lFile" accept="image/*,.svg">
             <strong>Bild auswählen oder hierher ziehen</strong>
-            <span class="hint">JPG, PNG, WebP oder SVG, ein Bild pro Gravur</span>
+            <span class="hint">Fotos (JPG, PNG, WebP) oder Grafiken (auch SVG), ein Bild pro Gravur</span>
           </label>
           <ul class="thumbs" id="lThumb"></ul>
+        </li>
+
+        <li class="step done">
+          <h2>Bildart</h2>
+          <fieldset class="seg">
+            <legend>Bildart</legend>
+            <label class="opt"><input type="radio" name="lKind" value="foto" checked><span><b>Foto</b><small>Graustufen, Gesichter, Landschaften – feine Rasterung</small></span></label>
+            <label class="opt"><input type="radio" name="lKind" value="grafik"><span><b>Grafik / Logo</b><small>Klare Flächen und Linien – scharfe Kanten</small></span></label>
+          </fieldset>
+          <p class="hint" id="lKindHint" hidden></p>
         </li>
 
         <li class="step done">
@@ -785,6 +795,7 @@ select.fp-native { display: none !important; }
             <label class="opt"><input type="radio" name="material" value="holz"><span><b>Holz</b><small>Gravur wird dunkel</small></span></label>
             <label class="opt"><input type="radio" name="material" value="leder"><span><b>Leder</b><small>Gravur wird dunkel</small></span></label>
             <label class="opt"><input type="radio" name="material" value="alu"><span><b>Alu, eloxiert</b><small>Schwarz eloxiert, Gravur wird hell</small></span></label>
+            <label class="opt"><input type="radio" name="material" value="glas"><span><b>Glas</b><small>Gravur wird mattweiß, Bild wird invertiert</small></span></label>
           </fieldset>
         </li>
 
@@ -802,13 +813,28 @@ select.fp-native { display: none !important; }
             </label>
             <label class="f">Rasterung
               <select id="lDither">
-                <option value="floyd" selected>Fehlerstreuung (Fotos)</option>
-                <option value="ordered">Rasterpunkte, gleichmäßig</option>
-                <option value="threshold">Schwellwert (Strichbilder, Logos)</option>
+                <optgroup label="Fotos">
+                  <option value="jarvis">Jarvis – weich, detailreich</option>
+                  <option value="stucki">Stucki – etwas schärfer</option>
+                  <option value="atkinson">Atkinson – kräftiger Kontrast</option>
+                  <option value="floyd" selected>Floyd-Steinberg</option>
+                  <option value="halftone">Punktraster – einzelne Punkte (Glas)</option>
+                </optgroup>
+                <optgroup label="Grafiken">
+                  <option value="threshold">Schwellwert (Strichbilder, Logos)</option>
+                  <option value="ordered">Rasterpunkte, gleichmäßig</option>
+                </optgroup>
                 <option value="none">Keine, nur Graustufen</option>
               </select>
             </label>
           </div>
+          <p class="hint" id="lRec"></p>
+          <div class="fields" id="lPhotoRow">
+            <label class="f">Lokaler Kontrast (0–1)<input type="number" id="lLocal" value="0.4" min="0" max="1" step="0.05"></label>
+            <label class="f" id="lCellRow" hidden>Punktabstand (mm)<input type="number" id="lCell" min="0.2" max="3" step="0.05"></label>
+          </div>
+          <label class="check" id="lDenoiseRow"><input type="checkbox" id="lDenoise" checked><span>Bildrauschen glätten (verhindert Krümel in Flächen)</span></label>
+          <label class="check"><input type="checkbox" id="lMirror"><span>Spiegeln – von der Rückseite gravieren (Glas, Acryl)</span></label>
           <label class="check" id="lBgRow"><input type="checkbox" id="lBg"><span>Hintergrund entfernen (nur das Motiv wird graviert)</span></label>
           <label class="check"><input type="checkbox" id="lCrop" checked><span>Auf das Motiv zuschneiden, wenn der Hintergrund fehlt</span></label>
           <p class="hint" id="lBgHint" hidden>Hintergrund entfernen ist auf diesem Server nicht installiert.</p>
@@ -820,13 +846,14 @@ select.fp-native { display: none !important; }
               <label class="f">Detailverstärkung (0–1)<input type="number" id="lDetail" value="0.4" min="0" max="1" step="0.05"></label>
               <label class="f">Schärfen (0–3)<input type="number" id="lSharpen" value="1.2" min="0" max="3" step="0.1"></label>
               <label class="f">Gravurstärke-Kurve<input type="number" id="lGamma" placeholder="1,0" min="0.4" max="2.5" step="0.05"></label>
+              <label class="f">Höchste Gravurdichte (%)<input type="number" id="lMaxBurn" placeholder="100" min="30" max="100" step="5"></label>
               <label class="f" id="lThreshRow" hidden>Schwellwert (1–254)<input type="number" id="lThreshold" value="128" min="1" max="254" step="1"></label>
               <label class="f">Invertieren
                 <select id="lInvert"><option value="">passend zum Material</option><option value="true">immer</option><option value="false">nie</option></select>
               </label>
             </div>
             <label class="check"><input type="checkbox" id="lAuto" checked><span>Kontrast automatisch verbessern</span></label>
-            <p class="hint">Gravurstärke-Kurve über 1 graviert Mitteltöne schwächer, unter 1 kräftiger. Hilfreich, wenn der Schiefer zu hell und kreidig wird.</p>
+            <p class="hint">Gravurstärke-Kurve über 1 graviert Mitteltöne schwächer, unter 1 kräftiger – bei Fotos gleicht sie aus, dass der Laserpunkt breiter brennt als ein Pixel. Leere Felder nehmen den Wert, der zu Material und Bildart passt. Die höchste Gravurdichte begrenzt, wie dicht dunkle Stellen graviert werden; auf Glas bleiben die Punkte so getrennt und brechen nicht aus.</p>
           </details>
         </li>
 
@@ -1112,9 +1139,11 @@ if (location.hash === "#svg3d") setMode("svg");
 let lFile = null;
 async function lSet(f) {
   if (!f) return;
+  const wasSvg = isSvg(f);
   if (isSvg(f)) { f = (await prepImages([f], $("#lError")))[0]; if (!f) return; }
   if (!f.type.startsWith("image/")) return;
   lFile = f;
+  lDetectKind(f, wasSvg);
   const url = URL.createObjectURL(f);
   $("#lThumb").innerHTML = `<li><img alt="${esc(f.name)}" src="${url}"><div class="ctl"><span></span><button type="button" aria-label="Entfernen">✕</button><span></span></div></li>`;
   $("#lThumb img").onload = () => URL.revokeObjectURL(url);
@@ -1126,9 +1155,77 @@ const lDrop = $("#lDrop");
 ["dragenter", "dragover"].forEach(t => lDrop.addEventListener(t, e => { e.preventDefault(); lDrop.classList.add("over"); }));
 ["dragleave", "drop"].forEach(t => lDrop.addEventListener(t, e => { e.preventDefault(); lDrop.classList.remove("over"); }));
 lDrop.addEventListener("drop", e => lSet(e.dataTransfer.files[0]));
-$("#lDither").addEventListener("change", () => $("#lThreshRow").hidden = $("#lDither").value !== "threshold");
+/* Foto oder Grafik? Grafiken bestehen fast nur aus wenigen Farben. */
+async function lDetectKind(f, wasSvg) {
+  let kind = "grafik";
+  if (!wasSvg) {
+    try {
+      const bmp = await createImageBitmap(f);
+      const s = 160, k = Math.min(1, s / Math.max(bmp.width, bmp.height));
+      const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+      const g = c.getContext("2d"); g.imageSmoothingEnabled = false; g.drawImage(bmp, 0, 0, c.width, c.height);
+      const d = g.getImageData(0, 0, c.width, c.height).data, count = new Map();
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 128) continue;
+        const key = (d[i] >> 4) << 8 | (d[i + 1] >> 4) << 4 | (d[i + 2] >> 4);
+        count.set(key, (count.get(key) || 0) + 1); n++;
+      }
+      const top = [...count.values()].sort((a, b) => b - a).slice(0, 8).reduce((a, b) => a + b, 0);
+      kind = n && top / n < 0.7 ? "foto" : "grafik";
+    } catch (e) { return; }
+  }
+  document.querySelector(`input[name=lKind][value=${kind}]`).checked = true;
+  $("#lKindHint").textContent = kind === "foto" ? "Als Foto erkannt – bei Bedarf umstellen." : "Als Grafik erkannt – bei Bedarf umstellen.";
+  $("#lKindHint").hidden = false;
+  lApplyDefaults();
+}
+
+/* Empfehlungen je Material und Bildart */
+let L_MAT = {
+  schiefer: { name: "Schiefer", foto: { dither: "jarvis", dpi: 318, gamma: 1.15, cell_mm: 0.5 } },
+  glas: { name: "Glas", foto: { dither: "halftone", dpi: 254, gamma: 1.25, cell_mm: 0.5, max_burn: 0.75 } },
+  holz: { name: "Holz", foto: { dither: "jarvis", dpi: 254, gamma: 1.4, cell_mm: 0.6 } },
+  leder: { name: "Leder", foto: { dither: "stucki", dpi: 254, gamma: 1.3, cell_mm: 0.6 } },
+  alu: { name: "Alu", foto: { dither: "jarvis", dpi: 423, gamma: 1.0, cell_mm: 0.4 } },
+};
+const lDe = (v, d = 2) => String(+Number(v).toFixed(d)).replace(".", ",");
+const lDitherName = (v) => $(`#lDither option[value=${v}]`).textContent.split(" – ")[0];
+function lUpdateRows() {
+  const foto = val("lKind") === "foto", d = $("#lDither").value;
+  $("#lThreshRow").hidden = d !== "threshold";
+  $("#lCellRow").hidden = d !== "halftone";
+  $("#lPhotoRow").hidden = !foto && d !== "halftone";
+  $("#lLocal").closest("label").hidden = !foto;
+  $("#lDenoiseRow").hidden = !foto;
+}
+function lApplyDefaults() {
+  const m = L_MAT[val("material")], foto = val("lKind") === "foto";
+  if (foto) {
+    const r = m.foto;
+    $("#lDither").value = r.dither; $("#lDpi").value = String(r.dpi);
+    $("#lDetail").value = 0.2; $("#lSharpen").value = 0.8;
+    $("#lGamma").placeholder = lDe(r.gamma); $("#lCell").placeholder = lDe(r.cell_mm);
+    $("#lMaxBurn").placeholder = String(Math.round((r.max_burn || 1) * 100));
+    $("#lRec").textContent = `Empfehlung für Fotos auf ${m.name}: ${lDitherName(r.dither)}${r.dither === "halftone" ? ` mit ${lDe(r.cell_mm)} mm Punktabstand` : ""}, ${r.dpi} DPI, Kurve ${lDe(r.gamma)}` +
+      (r.max_burn ? `, höchstens ${Math.round(r.max_burn * 100)} % Gravurdichte` : "") + " – schon eingestellt.";
+  } else {
+    $("#lDither").value = "threshold";
+    $("#lDetail").value = 0.4; $("#lSharpen").value = 1.2;
+    $("#lGamma").placeholder = "1,0"; $("#lCell").placeholder = lDe(m.foto.cell_mm); $("#lMaxBurn").placeholder = "100";
+    $("#lRec").textContent = "Grafiken werden mit Schwellwert in klare Flächen umgesetzt. Für Graustufen-Grafiken eine Foto-Rasterung wählen.";
+  }
+  if (val("material") === "glas" && !$("#lMirror").dataset.touched) $("#lMirror").checked = foto;
+  if (val("material") !== "glas" && !$("#lMirror").dataset.touched) $("#lMirror").checked = false;
+  lUpdateRows();
+}
+$("#lDither").addEventListener("change", lUpdateRows);
+$("#lMirror").addEventListener("change", () => $("#lMirror").dataset.touched = "1");
+$$("input[name=lKind], input[name=material]").forEach(r => r.addEventListener("change", lApplyDefaults));
+lApplyDefaults();
 
 fetch("api/engrave/info").then(r => r.json()).then(j => {
+  if (j.materials) for (const [k, v] of Object.entries(j.materials)) if (L_MAT[k] && v.foto) L_MAT[k] = { name: L_MAT[k].name, foto: v.foto };
   if (!j.remove_bg) {
     $("#lBg").disabled = true; $("#lBg").checked = false; $("#lBgHint").hidden = false;
     if (j.remove_bg_reason) $("#lBgHint").textContent = j.remove_bg_reason;
@@ -1144,6 +1241,9 @@ function lOptions() {
     threshold: lNum("lThreshold") ?? 128, autocontrast: $("#lAuto").checked,
     detail: lNum("lDetail") ?? 0.4, sharpen: lNum("lSharpen") ?? 1.2, gamma: lNum("lGamma"),
     invert: inv === "" ? null : inv === "true",
+    kind: val("lKind"), cell_mm: lNum("lCell"), denoise: $("#lDenoise").checked,
+    local_contrast: lNum("lLocal") ?? 0.4, mirror: $("#lMirror").checked,
+    max_burn: lNum("lMaxBurn") == null ? null : lNum("lMaxBurn") / 100,
   };
 }
 
@@ -1156,6 +1256,10 @@ const L_TIPS = {
           "Mit geringer Leistung beginnen, Leder dunkelt schnell nach."],
   alu: ["Diodenlaser entfernen nur die Eloxalschicht, das Metall darunter bleibt unversehrt.",
         "Für feine Details eine hohe Auflösung (423 DPI oder mehr) wählen."],
+  glas: ["Klares Glas lässt das blaue Licht eines Diodenlasers durch: die Oberfläche vorher deckend mit schwarzer Acryl- oder Temperafarbe (oder Markierspray) bestreichen und trocknen lassen, danach abwaschen.",
+         "Mit wenig Leistung und hoher Geschwindigkeit beginnen – Glas soll nur mattiert werden. Zu viel Hitze lässt es splittern.",
+         "Fotos wirken am besten von der Rückseite graviert (Spiegeln an) und vor dunklem Hintergrund, z. B. schwarzer Karton hinter dem Glas.",
+         "Das Punktraster und die auf 75 % begrenzte Gravurdichte halten die Punkte getrennt, so brechen keine großen Flächen aus."],
 };
 
 $("#lForm").addEventListener("submit", async (e) => {
@@ -1199,6 +1303,7 @@ function lShow(j, o) {
        `Bildmodus „Threshold“ bzw. „Pass-Through“, Zeilenabstand ${line} mm. Sonst passen die Punkte nicht mehr zur Zeilenführung.`]
     : [`Graustufen-Datei öffnen und mit der Rasterung der Lasersoftware gravieren (z. B. „Jarvis“ oder „Stucki“), Zeilenabstand ${line} mm.`];
   steps.push("Zuerst ein kleines Testraster mit verschiedenen Leistungen und Geschwindigkeiten auf einem Reststück gravieren.");
+  if (o.mirror) steps.push("Die Vorlage ist gespiegelt: auf der Rückseite gravieren, dann liest sie sich von vorne richtig.");
   steps.push(...L_TIPS[o.material]);
   $("#lHowto").innerHTML = steps.map(s => `<li>${esc(s)}</li>`).join("");
   $("#lResult").hidden = false;
